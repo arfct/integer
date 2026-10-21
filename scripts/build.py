@@ -155,7 +155,11 @@ def build_master(size, weight_key, style, path):
         'familyName': FAMILY, 'styleName': style,
         'uniqueFontIdentifier': f'{FAMILY} {style} {VERSION}', 'fullName': f'{FAMILY} {style}',
         'psName': f'{FAMILY.replace(" ", "")}-{style.replace(" ", "")}', 'version': f'Version {VERSION}',
-        'copyright': 'Drawings derived from Pixel Operator (Jayvee Enaguas, CC0 1.0).',
+        'copyright': 'Copyright 2026 Artifact. Derived from Inter, Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter).',
+        'licenseDescription': 'This Font Software is licensed under the SIL Open Font License, Version 1.1. '
+                              'This license is available with a FAQ at: https://openfontlicense.org',
+        'licenseInfoURL': 'https://openfontlicense.org',
+        'manufacturer': 'Artifact', 'designer': 'Rasmus Andersson (Inter); Artifact (Integer Sans)',
     })
     wclass = next(w for k, _, w, _ in WEIGHTS if k == weight_key)
     fb.setupOS2(version=4, sTypoAscender=asc, sTypoDescender=-desc, sTypoLineGap=0,

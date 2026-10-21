@@ -30,4 +30,8 @@ Serve the repo root (`python3 -m http.server`) and open `preview/`: every size f
 
 ## Sources
 
-`glyphs/<grid>/{light,regular,bold}.txt` are generated from `vendor/inter/InterVariable.ttf` (Inter 4.1, SIL Open Font License 1.1) and committed so every build is reproducible. Each file names its grid, ascent, descent, cap height, and x-height in a header; each entry is a name, codepoint, an advance in pixels, an optional `left` offset, and a bitmap (`#` ink, `.` clear). `charset.txt` lists the codepoints to render. The earlier Pixel Operator drawings live in `experiments/pixel-operator/`.
+`glyphs/<grid>/{light,regular,bold}.txt` are generated from `vendor/inter/InterVariable.ttf` (Inter 4.1, SIL Open Font License 1.1) and committed so every build is reproducible. Each file names its grid, ascent, descent, cap height, and x-height in a header; each entry is a name, codepoint, an advance in pixels, an optional `left` offset, and a bitmap (`#` ink, `.` clear). `charset.txt` lists the codepoints to render.
+
+## License
+
+The font is a derivative of Inter and is licensed under the SIL Open Font License 1.1 ([vendor/inter/LICENSE.txt](vendor/inter/LICENSE.txt)); the scripts and everything else in the repo are MIT ([LICENSE](LICENSE)).

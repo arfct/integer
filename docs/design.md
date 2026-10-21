@@ -1,6 +1,6 @@
 # Integer Sans: a variable pixel font
 
-_Working design, October 2026. The font is named Integer Sans and its drawings are rendered from Inter by `scripts/import-inter.py` (grids 8 to 24, three weights); `scripts/build.py` packs every exact size to 48 into one stepped file and `scripts/check.py` proves each instance is a bitmap through FreeType. The Pixel Operator drawings that started the project live in `experiments/pixel-operator/`. Hand correction of the rendered glyphs, the character set, and kerning are open._
+_Working design, October 2026. The font is named Integer Sans and its drawings are rendered from Inter by `scripts/import-inter.py` (grids 8 to 24, three weights); `scripts/build.py` packs every exact size to 48 into one stepped file and `scripts/check.py` proves each instance is a bitmap through FreeType. Hand correction of the rendered glyphs, the character set, and kerning are open._
 
 ## Thesis: a pixel font is a bundle of drawings, and a variable font is the modern bundle
 
@@ -10,20 +10,11 @@ The same trick makes weight honest. A stepped weight axis holds a 1px drawing an
 
 System Six draws its components at one art pixel per whole number of device pixels. This font extends that discipline to type, with the same rule in the other direction: the font-size, times the display density, picks a drawing that exists.
 
-## Starting point: the System Six faces
+## Starting point: Inter
 
-System Six ships Pixel Operator (Jayvee Enaguas, CC0 1.0) in three roles: 16px system and app text, an 8px small face, and a mono. Its two grids are the first two drawings of this font and their metrics are kept exactly:
+Integer Sans is Inter (Rasmus Andersson, SIL Open Font License 1.1) rendered to pixel grids. Inter is a variable font with weight and optical-size axes, so a drawing per grid and weight can be rendered rather than drawn; what remains to design is how its proportions round to rows and how its strokes round to pixels, which the pipeline section below sets out. As a derivative, the font ships under the OFL; the build code is MIT.
 
-| Metric | 16-row grid | 8-row grid |
-|---|---|---|
-| Units per pixel on the 1600 em | 100 | 200 |
-| Ascent / descent in rows | 13 / 3 | 7 / 1 |
-| Cap height, ascender | 9 | 7 |
-| x-height | 7 | 5 |
-| Stems: Regular, Bold | 1, 2 | 1, 2 |
-| Advance of a 5-wide letter | 7 (Bold 8) | 7 (Bold 8) |
-
-Both Bolds are the Regular smeared one pixel to the right with the advance grown by one, the rule the original system used to synthesize bold. That rule is why a smeared Bold needs no drawing of its own, and it is also the limit of what can be derived: a Light cannot be derived, because nothing is thinner than one pixel.
+System Six is the first consumer. It draws its components at one art pixel per whole number of device pixels, and this font extends that discipline to type.
 
 ## The model: ink is rectangles, axes are stepped, and every instance is a bitmap
 
@@ -101,7 +92,7 @@ Eight to sixteen rows is where every pixel is a decision and the drawings must b
 
 The order is driven by what System Six and its apps render, not by glyph count, and every grid must carry the whole set, which is the strongest argument for a short grid list:
 
-1. **Latin core** (the 238 Pixel Operator codepoints, imported) plus the UI set: ⌘ ⌥ ⇧ ⌃ ⎋ ⌫ ⏎ ✓ ✗ • … – — ‹ › « » ‘ ’ “ ” and the arrows.
+1. **Latin core** (the 238 codepoints in `charset.txt`) plus the UI set: ⌘ ⌥ ⇧ ⌃ ⎋ ⌫ ⏎ ✓ ✗ • … – — ‹ › « » ‘ ’ “ ” and the arrows.
 2. **Latin extended** to the Google Fonts Latin Plus set (~600 glyphs), Vietnamese excluded until marks stack.
 3. **Marks and composition.** Draw the ~30 combining marks once per grid and give bases `top`/`bottom` anchors in pixel coordinates; the build composes accented glyphs and emits `mark`/`mkmk`.
 4. **Greek and Cyrillic.**
