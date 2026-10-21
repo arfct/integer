@@ -1,83 +1,98 @@
 # A variable pixel font
 
-_Working design, October 2026. The prototype in this repo builds; the character set, bold tuning, and the opsz grid are open._
+_Working design, October 2026. Two prototypes build: a continuous one (`scripts/build.py`) and a stepped one (`experiments/stepped/`). The stepped model is the direction; the character set, bold tuning, and the grid list are open._
 
-## Thesis: a pixel font can be variable only where the variation lands on pixels
+## Thesis: a pixel font is a bundle of drawings, and a variable font is the modern bundle
 
-A pixel font is a promise that every mark is a whole pixel. Variable fonts are a promise that every design can be interpolated. The two promises conflict unless the thing being varied is itself measured in pixels—and on 2× and 3× displays, in *device* pixels. That is the organizing idea of this font: every axis moves rectangles by pixel-shaped amounts, so the ends of every axis are honest bitmaps and the middle of every axis is crisp on a dense enough screen.
+A pixel font is a promise that every mark is a whole pixel. That promise cannot survive scaling: a 16-row drawing is a bitmap at 16 pixels and a blur at 15. The 1980s answer was a suitcase of hand-drawn sizes, 9, 10, 12, 14, 18, and 24 point, and the system picked the one that matched. That answer is still right. What changed is the container: a variable font with a **stepped size axis** holds every drawing, the browser picks one from the font-size by itself, and nothing in between ever renders.
 
-System Six draws its components at one art pixel per whole number of device pixels. This font extends that discipline to type.
+The same trick makes weight honest. A stepped weight axis holds a 1px drawing and a 2px drawing and snaps between them, so `font-weight: 550` renders the one or the other, never an overlap of both. Every rendered instance is a drawing someone made.
+
+System Six draws its components at one art pixel per whole number of device pixels. This font extends that discipline to type, with the same rule in the other direction: the font-size, times the display density, picks a drawing that exists.
 
 ## Starting point: the System Six faces
 
-System Six ships Pixel Operator (Jayvee Enaguas, CC0 1.0) in three roles: 16px system and app text, an 8px small face, and a mono. Its metrics are the base of this design and are kept exactly:
+System Six ships Pixel Operator (Jayvee Enaguas, CC0 1.0) in three roles: 16px system and app text, an 8px small face, and a mono. Its two grids are the first two drawings of this font and their metrics are kept exactly:
 
-| Metric | Pixels |
-|---|---|
-| Em | 16 (100 font units per pixel on a 1600-unit em) |
-| Ascent / descent | 13 / 3 (baseline sits 3 rows up; line height 16 with no gap) |
-| Cap height, ascender | 9 |
-| x-height | 7 |
-| Stem | 1 (Regular), 2 (Bold) |
-| Typical advance | 7 for a 5-wide letter with one pixel of bearing each side; Bold adds 1 |
+| Metric | 16-row grid | 8-row grid |
+|---|---|---|
+| Units per pixel on the 1600 em | 100 | 200 |
+| Ascent / descent in rows | 13 / 3 | 7 / 1 |
+| Cap height, ascender | 9 | 7 |
+| x-height | 7 | 5 |
+| Stems: Regular, Bold | 1, 2 | 1, 2 |
+| Advance of a 5-wide letter | 7 (Bold 8) | 7 (Bold 8) |
 
-Pixel Operator Bold is the Regular smeared one pixel to the right with the advance grown by one—the same rule the 1980s system used to synthesize bold. That rule is what makes a weight axis possible.
+Both Bolds are the Regular smeared one pixel to the right with the advance grown by one, the rule the original system used to synthesize bold. That rule is why a smeared Bold needs no drawing of its own, and it is also the limit of what can be derived: a Light cannot be derived, because nothing is thinner than one pixel.
 
-## The model: ink is rectangles, and rectangles interpolate
+## The model: ink is rectangles, axes are stepped, and every instance is a bitmap
 
-Every glyph is a text bitmap. The build turns ink into rectangles and emits one TrueType contour per rectangle, overlapping where they touch. Because every master has the same rectangles in the same order, any transform that only moves or resizes rectangles is a valid variable-font master.
+Every glyph is a text bitmap. The build turns ink into rectangles and emits one TrueType contour per rectangle. Drawings on different grids have different rectangle counts, so the build pads every glyph to the largest count with zero-size rectangles; that makes any two drawings "compatible" in the variable-font sense, even though interpolating between them would be nonsense.
 
-Three transforms fall out of that, and each one is a classic bitmap operation made continuous:
+The nonsense is never shown. Each axis carries an `avar` map so steep that the interpolation band is a thousandth of the axis wide:
 
-| Axis | Transform | Ends | Why it stays crisp |
+| Axis | User range | Renders | Switch |
 |---|---|---|---|
-| **Weight** `wght` 400–700 | Every rectangle grows to the right by _k_ pixels; the advance grows by _k_ | 1px and 2px stems, matching Pixel Operator Regular and Bold | At 550 the stem is 1.5px: blurry at 1×, exactly 3 device pixels at 2× |
-| **Slant** `slnt` 0 to −18° | Each row shifts right by ⌊y / 3⌋ pixels, baseline fixed | Upright, and a true shear | Whole-pixel shifts at the end; half-pixel shifts at 2× in the middle |
-| **Roundness** `ROND` 0–100 | Every pixel's corner radius grows from 0 to half a pixel | Squares, and dots | Decorative; crisp only at 0 |
+| **Size** `opsz` | 8–16 | the 8-row drawing below 12, the 16-row drawing from 12 | 11.99 → 12 |
+| **Weight** `wght` | 400–700 | 1px stems below 550, 2px stems from 550 | 549.99 → 550 |
 
-The axes are independent, so the build uses one sparse master per axis end rather than every corner of the cube. Bold + slanted + round is the sum of three deltas and needs no master of its own.
+Browsers set `opsz` from the font-size when `font-optical-sizing: auto` is on (the default), so a consumer writes `font-size: 10px` and gets the 8-row drawing at 1.25× scale, or `font-size: 8px` and gets it exactly. Sizes above the largest grid clamp to it, so 32px is the 16-row drawing at 2×, which is also crisp.
 
-**Primitive choice.** With `--primitive pixels` every source pixel is a 12-point rounded rectangle, which is what makes `ROND` possible. With `--primitive runs` every horizontal run is a 4-point rectangle. At 241 glyphs the woff2 sizes are 8 KB and 6 KB, so the pixel primitive is the default; the run primitive exists for a minimal install build.
+**Verified in Chrome on a 2× display**, by measuring advance widths in the DOM at every size from 8 to 24: each size picks exactly one drawing, 11.5px included, and the 550 weight boundary snaps. Rendering the same text to a canvas with `-webkit-font-smoothing: none` gives **zero gray pixels** at 16px; without it, macOS text smoothing adds a one-device-pixel fringe at about 20% gray around every edge. That fringe is the renderer, not the font, and the CSS turns it off for DOM text. (Chrome's canvas picked the 8-row drawing at exactly 16px, which I could not explain; DOM text was right at every size.)
 
-**What this model cannot do.** It cannot interpolate between two different drawings. A hand-drawn Bold whose runs are not supersets of the Regular's runs has no correspondence, and a condensed width is a different drawing entirely. The containment rule in the next section is the escape hatch for Bold; a width axis is out of scope.
+**What this model gives up.** Continuous axes. The first prototype has a continuous weight (a 1.5px stem is exactly 3 device pixels at 2×), a slant that shears rows, and a roundness axis that turns pixels into dots. Those are real and cheap, and the roundness one is the trick the existing variable pixel fonts rely on, but they are decorative next to the promise above. They can ship as a separate file. The main font steps.
 
-## Weight: smear by default, hand-tune by exception
+## Weights are quantized by the grid, and names follow a ratio
 
-Smearing works for most of Latin, and it is exactly what the original Bold did. It fails in two places: tight counters that close (`a`, `e`, `s` at 2px stems in a 5-wide letter) and glyphs whose rhythm depends on the right stem staying put.
+A weight is a stem count, and a stem count only means something relative to the letter. Define weight by stem-to-cap-height ratio and round to whole pixels with a floor of one:
 
-The plan is to accept a per-glyph `bold:` bitmap in the source that overrides the smear. The build maps it onto the Regular with a **containment rule**: each Bold row must have no more runs than the Regular row, and every Regular run must sit inside a Bold run. Regular runs that share a Bold run are extended rightward until they meet. Anything that fails the rule is a build error with both bitmaps printed, so a stray pixel is caught at build time rather than in a menu.
+| Weight | Stem / cap | 16-row (cap 9) | 32-row (cap 18) | 48-row (cap 27) |
+|---|---|---|---|---|
+| 200 Light | ~5% | 1 (same as Regular) | 1 | 1 |
+| 400 Regular | ~11% | 1 | 2 | 3 |
+| 800 Bold | ~22% | 2 | 4 | 6 |
 
-A Black master (3px stems) is possible under the same rule but needs every glyph redrawn wider, so it is not in the first release. The axis is 400–700 until there are drawings that earn 900.
+Two consequences. **Light does not exist at small grids**: the 16-row 200 is the 400, exactly as the old suitcases had no Light at 9 point. The font says so by giving the 200 master the Regular's drawing, so the step is a no-op rather than an error. **Light appears on dense displays by itself**: 16px text at 2× is 32 device pixels, so if the font has a 32-row drawing, `opsz` 16 on a 2× screen could pick it and render a true 1-device-pixel Light. Whether `opsz` should mean CSS pixels (the CSS rule) or device pixels (what crispness wants) is a consumer decision; System Six already computes its density and can set `font-variation-settings: "opsz" N` explicitly.
 
-## Scaling to any size is a rule, not a feature
+Smearing covers 400 → 800 on every grid and matches the historical Bolds. Where it closes a counter (`a`, `e`, `s` at 2px stems in a 5-wide letter), a per-glyph `bold:` bitmap in the source overrides it. Because the axis is stepped, the override has no compatibility constraint beyond rectangle count, which the padding handles. The first prototype's "containment rule" is no longer needed.
 
-No pixel font scales continuously. The rule for crisp text is:
+## The grid list is the real design work
 
-> **font-size × devicePixelRatio must be a whole multiple of 16.**
+The suitcase had six sizes. Every grid is a drawing of the whole character set, so the list has to be small and earn each entry. The candidate rule: cover every CSS size from 8 to 16 at 1×, 2×, and 3×, then rely on integer scaling above that.
 
-| Display | Crisp CSS sizes for the 16 grid |
-|---|---|
-| 1× | 16, 32, 48, 64 |
-| 2× | 8, 16, 24, 32, 40, 48 |
-| 3× | 16 / 3 steps: 5.33, 10.67, 16, 21.33, 26.67, 32 |
+| Grid (rows) | Serves at 1× | at 2× | at 3× |
+|---|---|---|---|
+| 8 | 8, 16, 24 | 4, 8, 12 | 5.33, 8 |
+| 10 | 10, 20, 30 | 5, 10, 15 | 10 |
+| 12 | 12, 24, 36 | 6, 12, 18 | 8, 12 |
+| 14 | 14, 28 | 7, 14, 21 | 14 |
+| 16 | 16, 32, 48 | 8, 16, 24 | 16, 32 |
+| 20 | 20, 40 | 10, 20, 30 | 20 |
+| 24 | 24, 48 | 12, 24, 36 | 24 |
 
-Everything else antialiases symmetrically, which is tolerable but not the point. Three things make this good rather than merely true:
+Eight to sixteen rows is where every pixel is a decision and the drawings must be by hand. Above that, a drawing can start as the 16-row one scaled by an integer, or as a rasterization of a vector skeleton, and be corrected where it reads badly. METAFONT solved exactly this in 1984, parameters in and pixel-exact bitmaps out at any resolution, and a stroke skeleton with a pixel-art rasterizer is the pragmatic version of it: it drafts the 20-, 24-, and 32-row grids, and the designer fixes the glyphs that matter.
 
-1. **The specimen states it.** The preview page shows whether the current size is crisp at the viewer's density. Any consumer stylesheet can compute the same thing, and System Six already does for its own `--s6-px`.
-2. **An 8-grid companion face** covers the small end and gives 1× displays crisp 8, 24, and 40. It is a separate drawing (Pixel Operator 8 is the model), built from the same source format with `ASC`/`DESC` of 7/1.
-3. **A grid axis is possible but experimental.** Variable fonts cannot hold two incompatible drawings, but they can hold two drawings padded to the same rectangle count, with an `avar` map so steep that the interpolation band is invisible: user `opsz` 8–11 on the 8 grid, 12 and up on the 16 grid. With `font-optical-sizing: auto`, small text would switch grids by itself. This is a real technique and a real hack; it is phase 4, after the drawings exist, and only if the padding cost is small.
+**Recommendation:** ship 8 and 16 first (they exist), add 12 (the most-used UI size on 1× Windows and the 2× size of 6, which nobody uses, so really a 1× grid), then 10 and 24. Decide 14 and 20 from use.
 
-Rendering notes that matter: set `-webkit-font-smoothing: none` only on 1× screens (it disables subpixel AA, which hides the half-weights on 2×); include a `gasp` table so Windows renders the design size without grayscale; never rely on `image-rendering`, which does not apply to text.
+## Delivery: one variable file, and the platform question
+
+**On the web**, one woff2 with stepped `opsz` and `wght` is the whole deliverable. It works wherever variable fonts do, and `font-optical-sizing: auto` makes size selection automatic. Consumers add `-webkit-font-smoothing: none` on macOS and never need to know how many drawings are inside. At 241 glyphs and two grids the file is 14 KB; the cost grows with the largest grid's rectangle count, not with the number of grids, because of the padding, so a 24-row grid roughly triples it. Fine.
+
+**Embedded bitmap strikes** (`EBDT`/`EBLC`, the TrueType form of the suitcase) still exist in the OpenType spec and FreeType still honours them, so Linux and Android would use real bitmaps. macOS CoreText does not render monochrome strikes, and DirectWrite uses them only in its GDI-compatible modes, so browsers on the two desktop platforms that matter would ignore them. They are a legitimate addition for native Linux and embedded use and the build could emit them from the same bitmaps; they are not the primary mechanism.
+
+**Hinting** is the other historical route to pixel-exact rendering at every size, and it is dead on the web: CoreText and Chrome on macOS ignore TrueType instructions, and DirectWrite runs them only partially. Not pursued.
+
+**Native apps** get the same variable file. The one platform-specific note is that macOS stem darkening is on for all text, so a native app wants the aliased rendering mode (`NSFontSmoothing` off, or Core Text's antialiasing disabled) to see bitmaps.
 
 ## Character set: System Six first, then scripts
 
-The order is driven by what System Six and its apps render, not by glyph count:
+The order is driven by what System Six and its apps render, not by glyph count, and every grid must carry the whole set, which is the strongest argument for a short grid list:
 
 1. **Latin core** (the 238 Pixel Operator codepoints, imported) plus the UI set: ⌘ ⌥ ⇧ ⌃ ⎋ ⌫ ⏎ ✓ ✗ • … – — ‹ › « » ‘ ’ “ ” and the arrows.
-2. **Latin extended** to the Google Fonts Latin Plus set (~600 glyphs): all of Western, Central, and Northern European languages, Vietnamese excluded until marks stack.
-3. **Marks and composition.** Draw the ~30 combining marks once and give bases `top`/`bottom` anchors in pixel coordinates; the build composes accented glyphs from anchors and emits `mark`/`mkmk`, so uncommon combinations render too.
-4. **Greek and Cyrillic.** Both fit the 9/7/3 metrics; both are what separates a UI font from a game font.
-5. **Symbols that are native to a pixel grid**: box drawing, block elements, geometric shapes, Braille, and the legacy computing block. These are the one place a pixel font is strictly better than a vector one.
+2. **Latin extended** to the Google Fonts Latin Plus set (~600 glyphs), Vietnamese excluded until marks stack.
+3. **Marks and composition.** Draw the ~30 combining marks once per grid and give bases `top`/`bottom` anchors in pixel coordinates; the build composes accented glyphs and emits `mark`/`mkmk`.
+4. **Greek and Cyrillic.**
+5. **Symbols native to a pixel grid**: box drawing, block elements, geometric shapes, Braille, and the legacy computing block.
 
 Emoji and CJK are out of scope.
 
@@ -85,21 +100,20 @@ Emoji and CJK are out of scope.
 
 | Feature | Behaviour |
 |---|---|
-| `kern` | Pair and class kerning in whole pixels (`To`, `AV`, `r.`). Pixel Operator has none; one pixel of kerning at 16px is visible. |
-| `tnum` / `pnum` | Digits are tabular by default (7 wide); proportional `1` is an alternate. |
-| `zero`, `ss01`… | Slashed and dotted zero; single-storey `a` and `g`; serifed `I` and `l`; a round `0`. |
-| `case` | Punctuation and brackets raised one pixel for all-caps text. |
-| `frac`, `sups`, `subs`, `numr`, `dnom` | Drawn 5px figures, not scaled. |
-| `smcp` | Small caps at x-height (7) with 1px stems. |
-| `calt` | Code ligatures in the mono (`->`, `=>`, `!=`, `<=`) as alternates, off by default. |
+| `kern` | Pair and class kerning in whole pixels, per grid. One pixel at 16px is visible. |
+| `tnum` / `pnum` | Digits tabular by default; proportional `1` as an alternate. |
+| `zero`, `ss01`… | Slashed and dotted zero; single-storey `a` and `g`; serifed `I` and `l`. |
+| `case` | Punctuation raised one pixel for all-caps text. |
+| `frac`, `sups`, `subs` | Drawn small figures, not scaled. |
+| `smcp` | Small caps at x-height. |
+| `calt` | Code ligatures in the mono, off by default. |
 | `locl` | Turkish `i`, Romanian comma-below, Dutch `ĳ`. |
-| `mark`, `mkmk`, `ccmp` | From the anchors above. |
 
-Features are written in plain `.fea` and compiled by `fontTools.feaLib` at build time. Classes come from the glyph names, so kerning is written once for `A` and applies to `Á`.
+Features are plain `.fea`, compiled by `fontTools.feaLib` at build time. Kerning values vary by grid through the same `opsz` masters.
 
-## Source format: text bitmaps, one file per block
+## Source format: text bitmaps, one file per block per grid
 
-The source is text, like System Six's art. One file per Unicode block in `glyphs/`, entries separated by blank lines:
+One directory per grid (`glyphs/16/`, `glyphs/8/`), one file per Unicode block, entries separated by blank lines:
 
 ```
 name: a
@@ -116,36 +130,31 @@ advance: 7
 ..####..
 ```
 
-Planned keys, all optional: `bold:` (the override bitmap), `anchors: top=3,9 bottom=3,0`, `compose: e + acute@top`, `alt-of: a` for stylistic sets, `kern-class: O`. The parser is forty lines and the format diffs like code, which is the point: the font is reviewed in pull requests.
+Planned keys, all optional: `bold:` (override bitmap), `anchors:`, `compose: e + acute@top`, `alt-of:`, `kern-class:`. A glyph missing from a grid falls back to the nearest grid scaled by an integer, so a new grid can start sparse. The format diffs like code; the font is reviewed in pull requests.
 
 ## Build: fontTools, no font editor
 
-`scripts/build.py` parses the sources, writes one static TTF per master, assembles a designspace in memory, and calls `varLib.build`. It sets the overlap flag on every compound glyph, writes a proper name table and `STAT`, and saves TTF and woff2. It runs in a second. The import script that produced `glyphs/latin.txt` from Pixel Operator stays in the repo so the provenance is reproducible.
+The build parses every grid, pads rectangle counts, writes one static TTF per (grid, weight) master, assembles a designspace with stepped `avar` maps, and calls `varLib.build`. It sets the overlap flag, writes `name` and `STAT`, and saves TTF and woff2. `experiments/stepped/build.py` is the working proof at two grids and two weights; `scripts/build.py` is the earlier continuous build and becomes the optional decorative file.
 
-Not using a font editor is deliberate: the shapes are bitmaps, every transform is arithmetic, and every output is derived. Glyphs or FontForge would add a binary source file to a project whose whole advantage is that it has none.
+## Prior art
 
-## Prior art, and what is new here
+- **Handjet** (Rosetta, OFL) is the broadest variable pixel font: 23 element shapes, weight as element size, seven scripts. Weight shrinks dots rather than thickening stems, and nothing snaps to a grid.
+- **Doto** (Óliver Lalan, OFL, 2024): dot-size weight and a `ROND` roundness axis, Latin only.
+- **Pixelify Sans** (OFL): a 400–700 weight axis on a pixel face, continuous.
+- **Sixtyfour** and **Workbench** (OFL): C64 and Amiga drawings with CRT bleed and scanline axes.
+- Pixel Operator, Silkscreen, Departure Mono, and the Jersey family are static, one grid each.
 
-Variable pixel fonts exist, and the closest ones share a trait: they vary the *element* rather than the *drawing*.
-
-- **Handjet** (Rosetta, OFL) is the most complete: 23 element shapes, weight as element size, and Latin, Greek, Cyrillic, Arabic, Hebrew, Armenian, and Korean. It is a modular display face; weight shrinks the dots rather than thickening stems, so it is not crisp at UI sizes except at one end.
-- **Doto** (Óliver Lalan, OFL, 2024) has `wght` as dot size and a `ROND` 0–100 axis—the same tag and range this design uses for roundness. Latin only, on a 6×10 matrix.
-- **Pixelify Sans** (Stefie Justprince, OFL) is a pixel face with a 400–700 weight axis.
-- **Sixtyfour** and **Workbench** (OFL) are Commodore and Amiga pixel fonts with `BLED` (horizontal pixel bleed) and `SCAN` (scanline height) axes and a small glyph set.
-- Pixel Operator, Silkscreen, Departure Mono, and the Jersey family are static.
-
-What none of them do, as far as I could find, is build the weight axis from the system smear so that 400 and 700 are the historical Regular and Bold and 550 is a legitimate 2× weight, add a pixel-row slant, keep the 16-grid metrics that a UI kit draws against, and carry a UI-grade character set with kerning and features. That combination is the product. `ROND` is a nice extra that Doto already proved; it is not the reason to build this.
+All of the variable ones interpolate pixel shapes, which is the overlap effect. None uses the axes as a selector for discrete drawings, and none ships more than one grid. The stepped model is the new part; the drawings are the work.
 
 ## Sequencing
 
-1. **Now (done in this repo):** import, build, specimen; `wght`, `slnt`, `ROND` working on 241 glyphs.
-2. **Make it a font:** `bold:` overrides with the containment rule; kerning and `tnum`/`zero`/`case`; the UI symbols; a name; an OFL or MIT decision; System Six switches to it behind `--s6-font-system`.
-3. **Make it broad:** anchors and composition, Latin Plus, Greek, Cyrillic, box drawing; the 8-grid face; the mono as a second family from the same sources.
-4. **Experiments:** the `opsz` grid switch; a Black master; a bleed axis for CRT rendering if System Six ever wants it.
+1. **Done:** two grids and two weights in one stepped file, verified pixel-exact in the DOM.
+2. **Make it the font:** fold the stepped build into `scripts/build.py` with per-grid source directories; `bold:` overrides; kerning, `tnum`, `zero`, `case`; the UI symbols; a name and a license; System Six switches to it.
+3. **Make it broad:** the 12-row grid; anchors and composition; Latin Plus, Greek, Cyrillic, box drawing; the mono.
+4. **Later:** 10- and 24-row grids from a skeleton rasterizer; `EBDT` strikes for Linux; the continuous decorative file.
 
 ## Open decisions
 
-- **Name.** The build takes `--family`; nothing is committed to.
-- **License.** MIT matches the org default; OFL is what every peer font uses and what Google Fonts requires.
-- **Slant angle.** 18° (one pixel every three rows) reads as a shear at 16px; 14° (one in four) may suit text better. Both are one constant.
-- **Whether `ROND` ships in the main file** or as a separate dots build. It costs 2 KB and nothing else.
+- **Name** and **license** (MIT per the org default, or OFL like every peer font).
+- **Does `opsz` mean CSS pixels or device pixels** for the consumers we control. CSS pixels is the standard; device pixels is what crispness wants on 1.5× displays.
+- **Which grids** beyond 8, 12, and 16.

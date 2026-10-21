@@ -1,10 +1,19 @@
 # Pixel Variable
 
-A variable pixel font built from text bitmaps. Weight, slant, and roundness are real axes: the bold is the classic one-pixel smear made continuous, the slant shifts pixel rows, and roundness turns squares into dots. The grid and metrics are those of the System Six faces (16 rows per em, 13 above the baseline), so it drops in where Pixel Operator is used today.
+A variable pixel font built from text bitmaps, where every rendered instance is a real drawing. The size axis is stepped: it holds a drawing per pixel grid (8 and 16 rows today) and the browser picks one from the font-size, never an interpolation. The weight axis steps the same way between 1px and 2px stems. The grids and metrics are those of the System Six faces, so it drops in where Pixel Operator is used today.
 
 The design, its reasoning, and the roadmap are in [docs/design.md](docs/design.md).
 
-## Build
+## Stepped build (the direction)
+
+```bash
+uv venv && uv pip install 'fonttools[woff]'
+cd experiments/stepped && ../../.venv/bin/python build.py out
+```
+
+Writes `experiments/stepped/out/PixelStep-VF.woff2`; `test.html` next to it shows every size and weight step and measures gray pixels on a canvas. Add `-webkit-font-smoothing: none` on macOS to see true bitmaps.
+
+## Continuous build (the first prototype)
 
 ```bash
 uv venv && uv pip install 'fonttools[woff]'
