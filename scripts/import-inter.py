@@ -206,25 +206,91 @@ class _XHeightProp(ctypes.Structure):
     _fields_ = [('face', ctypes.c_void_p), ('limit', ctypes.c_uint)]
 
 
-def render_font(path, grid, smear):
+def bitmap_rows(bm):
+    """A FreeType bitmap as rows: mono -> '#'/'.', gray -> 0..255."""
+    if bm.pixel_mode == freetype.FT_PIXEL_MODE_MONO:
+        return [''.join('#' if bm.buffer[r * bm.pitch + c // 8] & (0x80 >> (c % 8)) else '.'
+                        for c in range(bm.width)) for r in range(bm.rows)]
+    return [[bm.buffer[r * bm.pitch + c] for c in range(bm.width)] for r in range(bm.rows)]
+
+
+def thin(rows, cover, limit=0.95):
+    """Pixel-perfect 1px strokes: drop partially covered ink pixels that are not
+    needed to keep the stroke connected (never ends, never full pixels).
+
+    rows: list of str ('#'/'.'), cover: same shape, 0..1. Removal is in order of
+    least coverage and repeats until stable. A pixel is removable when its ink
+    neighbours stay 8-connected through the 3x3 neighbourhood without it."""
+    h, w = len(rows), len(rows[0]) if rows else 0
+    ink = [[c == '#' for c in r] for r in rows]
+
+    def neighbours(y, x):
+        out = []
+        for dy in (-1, 0, 1):
+            for dx in (-1, 0, 1):
+                if (dy or dx) and 0 <= y + dy < h and 0 <= x + dx < w and ink[y + dy][x + dx]:
+                    out.append((dy, dx))
+        return out
+
+    def simple(y, x):
+        """Removable: its ink neighbours stay one 8-connected group without it,
+        it is not a stroke end, and it touches background orthogonally."""
+        ns = neighbours(y, x)
+        if len(ns) < 2:
+            return False
+        if all(0 <= y + dy < h and 0 <= x + dx < w and ink[y + dy][x + dx] for dy, dx in ((-1, 0), (1, 0), (0, -1), (0, 1))):
+            return False                      # interior pixel: removal would open a hole
+        groups = []
+        for n in ns:
+            joined = [gi for gi, grp in enumerate(groups) if any(abs(n[0] - m[0]) <= 1 and abs(n[1] - m[1]) <= 1 for m in grp)]
+            if not joined:
+                groups.append([n])
+            else:
+                merged = [n] + [m for gi in joined for m in groups[gi]]
+                groups = [grp for gi, grp in enumerate(groups) if gi not in joined] + [merged]
+        return len(groups) == 1
+
+    changed = True
+    while changed:
+        changed = False
+        cands = sorted(((cover[y][x], y, x) for y in range(h) for x in range(w)
+                        if ink[y][x] and cover[y][x] < limit), key=lambda t: t[0])
+        for c, y, x in cands:
+            if ink[y][x] and simple(y, x):
+                ink[y][x] = False
+                changed = True
+    return [''.join('#' if v else '.' for v in r) for r in ink]
+
+
+def render_font(path, grid, smear, pixel_perfect):
     face = freetype.Face(path)
     prop = _XHeightProp(ctypes.cast(face._FT_Face, ctypes.c_void_p).value, 0)
     freetype.raw.FT_Property_Set(freetype.get_handle(), b'autofitter', b'increase-x-height', ctypes.byref(prop))
     face.set_pixel_sizes(0, grid)
-    flags = freetype.FT_LOAD_RENDER | freetype.FT_LOAD_TARGET_MONO | freetype.FT_LOAD_FORCE_AUTOHINT
+    flags = freetype.FT_LOAD_TARGET_MONO | freetype.FT_LOAD_FORCE_AUTOHINT
     out = {}
     for cp in charset:
         face.load_char(cp, flags)
         g = face.glyph
-        bm = g.bitmap
-        rows = []
-        for r in range(bm.rows):
-            rows.append(''.join('#' if bm.buffer[r * bm.pitch + c // 8] & (0x80 >> (c % 8)) else '.'
-                                for c in range(bm.width)))
+        g.render(freetype.FT_RENDER_MODE_MONO)
+        rows, left, top = bitmap_rows(g.bitmap), g.bitmap_left, g.bitmap_top
+        adv = (g.advance.x + 32) // 64
+        if pixel_perfect and rows:
+            face.load_char(cp, flags)
+            g = face.glyph
+            g.render(freetype.FT_RENDER_MODE_NORMAL)
+            gray, gl, gt = bitmap_rows(g.bitmap), g.bitmap_left, g.bitmap_top
+            cover = [[0.0] * len(rows[0]) for _ in rows]
+            for y, r in enumerate(gray):
+                for x, v in enumerate(r):
+                    yy, xx = y + (top - gt), x + (gl - left)
+                    if 0 <= yy < len(rows) and 0 <= xx < len(rows[0]):
+                        cover[yy][xx] = v / 255.0
+            rows = thin(rows, cover)
         if smear and rows:
             rows = [''.join('#' if any(line[i - k] == '#' for k in range(0, smear + 1) if 0 <= i - k < len(line)) else '.'
                             for i in range(len(line) + smear)) for line in rows]
-        out[cp] = (rows, g.bitmap_left, g.bitmap_top, (g.advance.x + 32) // 64 + smear)
+        out[cp] = (rows, left, top, adv + smear)
     return out
 
 
@@ -269,7 +335,7 @@ for grid in grids:
         warp_font(font, pts)
         path = os.path.join(tmp, f'inter-{grid}-{weight}.ttf')
         font.save(path)
-        rendered[weight] = render_font(path, grid, smear)
+        rendered[weight] = render_font(path, grid, smear, pixel_perfect=(px == 1))
         notes[weight] = f'opsz {opsz}, wght {wght}, stem {px}px' + (f', smear {smear}' if smear else '')
     # One line box per grid, shared by every weight.
     ascent = max([m['asc'] + 1] + [top for r in rendered.values() for rows, _, top, _ in r.values() if rows])
