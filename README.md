@@ -4,28 +4,29 @@ Integer is a variable pixel font built from text bitmaps, where every rendered i
 
 The design, its reasoning, and the roadmap are in [docs/design.md](docs/design.md).
 
-## Stepped build (the direction)
+## Build
 
 ```bash
-uv venv && uv pip install 'fonttools[woff]'
-cd experiments/stepped && ../../.venv/bin/python build.py out
+uv venv && uv pip install 'fonttools[woff]' pillow
+.venv/bin/python scripts/build.py     # build/Integer-VF.ttf and .woff2
+.venv/bin/python scripts/check.py     # renders every exact size through FreeType; fails on any gray pixel
 ```
 
-Writes `experiments/stepped/out/IntegerStep-VF.woff2`; `test.html` next to it shows every size and weight step and measures gray pixels on a canvas. Add `-webkit-font-smoothing: none` on macOS to see true bitmaps.
+`scripts/derive.py` regenerates the 9, 10, 11, 12, and 14-row sources from the 8- and 16-row ones; it overwrites, so do not run it on grids that have been edited by hand.
 
-## Continuous build (the first prototype)
+## Use
 
-```bash
-uv venv && uv pip install 'fonttools[woff]'
-.venv/bin/python scripts/build.py
+```css
+@font-face { font-family: "Integer"; src: url(Integer-VF.woff2); font-weight: 400 700; }
+.pixel { font-family: "Integer"; -webkit-font-smoothing: none; }
 ```
 
-Writes `build/Integer-VF.ttf` and `.woff2`. `--family NAME` sets the family name; `--primitive runs` builds the smaller, square-only variant without the roundness axis.
+A font-size that is a whole multiple of a grid is exact at 1×; at 2× every whole font-size from 8 up with a drawing is exact. Sizes between drawings resample the nearest smaller one. Leave `font-optical-sizing` at its default (`auto`) so the size picks the drawing.
 
 ## Preview
 
-Serve the repo root (`python3 -m http.server`) and open `preview/`. The sliders drive the three axes, and the page says whether the current size is crisp at your display's density: font-size × devicePixelRatio must be a multiple of 16.
+Serve the repo root (`python3 -m http.server`) and open `preview/`: every size from 8 to 48 with the drawing it uses and whether it lands on whole device pixels at your display's density. `build/proof.png` is the same ladder rendered through FreeType and magnified 3×.
 
 ## Sources
 
-`glyphs/*.txt` are the font. Each entry is a name, codepoints, an advance in pixels, and a bitmap (`#` ink, `.` clear) with 13 rows above the baseline and 3 below. `glyphs/latin.txt` was imported from Pixel Operator (Jayvee Enaguas, CC0 1.0) with `scripts/import-pixel-operator.py`.
+`glyphs/<grid>/{regular,bold}.txt` are the font. Each file names its grid and ascent in a header; each entry is a name, codepoints, an advance in pixels, and a bitmap (`#` ink, `.` clear). The 8- and 16-row drawings were imported from Pixel Operator and Pixel Operator 8 (Jayvee Enaguas, CC0 1.0) with `scripts/import-pixel-operator.py`; the rest were derived and are meant to be corrected by hand.

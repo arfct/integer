@@ -1,80 +1,74 @@
-"""Build a variable pixel font from the text bitmaps in glyphs/.
+"""Build Integer: a variable pixel font in which every instance is a real bitmap.
 
-    python scripts/build.py [--family NAME] [--primitive pixels|runs] [--out build]
+    python scripts/build.py [--out build] [--max-size 48]
 
-Every glyph is drawn on a 16-row grid (100 font units per pixel on a 1600-unit
-em). The build turns ink into rectangles and makes them interpolate:
+Sources are glyphs/<grid>/<weight>.txt: one drawing per pixel grid (rows per
+em) and weight. The build turns every horizontal run of ink into a rectangle
+and packs all drawings into one variable font with two stepped axes:
 
-  wght  Weight. Each rectangle widens to the right by k pixels and the advance
-        grows by k: 0 at Regular (400), 1 at Bold (700). This is the classic
-        one-pixel "smear" bold, made continuous.
-  slnt  Slant. Each row shifts right by floor(y / 3) pixels (about 18 degrees
-        at the end of the axis); the baseline row stays put.
-  ROND  Roundness (pixels primitive only). Corner radius of every pixel, from a
-        square to a half-pixel radius, so a stem becomes a string of dots.
+  opsz  Size, 8 to --max-size. Each exact size (a grid times a whole number)
+        is a master; avar maps are so steep that a font-size snaps to the
+        nearest exact size at or below it, so `font-optical-sizing: auto`
+        picks the right drawing by itself. Sizes that are a multiple of a
+        grid reuse that grid's drawing (a duplicate master: more bytes, no
+        more drawing).
+  wght  400 Regular, 700 Bold; snaps at 550.
 
-Primitives:
-  pixels  one 12-point rounded rectangle per pixel; supports every axis.
-  runs    one 4-point rectangle per horizontal run; smallest file, no ROND.
+Drawings on different grids have different rectangle counts, so every glyph
+is padded to the largest count with zero-size rectangles; the padding is
+never rendered because no interpolation ever is. Metrics vary per master
+through MVAR so the baseline lands on a whole pixel at every exact size.
 """
 import argparse
+import json
 import os
 import re
 
 from fontTools import varLib
+from fontTools.varLib import models
 from fontTools.designspaceLib import (AxisDescriptor, DesignSpaceDocument,
                                       InstanceDescriptor, SourceDescriptor)
 from fontTools.fontBuilder import FontBuilder
 from fontTools.otlLib.builder import buildStatTable
 from fontTools.pens.ttGlyphPen import TTGlyphPen
+from fontTools.ttLib import newTable
 
-PX = 100
-UPM = 16 * PX
-ASC, DESC = 13, 3          # rows above and below the baseline
-CAP, XHEIGHT = 9, 7
-VERSION = '0.1'
+FAMILY = 'Integer'
+VERSION = '0.2'
+UPM = 5040                      # divisible by 8, 9, 10, 12, 14, 16; 11 rounds by 0.04%
+WEIGHTS = [('regular', 'Regular', 400, 0), ('bold', 'Bold', 700, 1)]
+HERE = os.path.dirname(os.path.abspath(__file__))
+GLYPHS = os.path.join(HERE, '..', 'glyphs')
 
 args = argparse.ArgumentParser()
-args.add_argument('--family', default='Integer')
-args.add_argument('--primitive', choices=['pixels', 'runs'], default='pixels')
-args.add_argument('--out', default='build')
-args.add_argument('--glyphs', default='glyphs')
+args.add_argument('--out', default=os.path.join(HERE, '..', 'build'))
+args.add_argument('--max-size', type=int, default=48)
+args.add_argument('--min-size', type=int, default=8)
 opt = args.parse_args()
 os.makedirs(opt.out, exist_ok=True)
 
 
-def parse_sources(folder):
-    """Read every glyphs/*.txt into [{name, unicode, advance, rows}]."""
-    glyphs = []
-    for fn in sorted(os.listdir(folder)):
-        if not fn.endswith('.txt'):
-            continue
-        text = open(os.path.join(folder, fn)).read()
-        text = re.sub(r'^#.*\n?', '', text, flags=re.M)
-        for block in re.split(r'\n\s*\n', text.strip()):
-            lines = [l for l in block.strip().split('\n') if l]
-            if not lines:
-                continue
-            if lines[0].startswith('name:'):
-                meta = dict(l.split(':', 1) for l in lines)
-                meta = {k.strip(): v.strip() for k, v in meta.items()}
-                glyphs.append({
-                    'name': meta['name'],
-                    'unicode': [int(u[2:], 16) for u in meta.get('unicode', '').split()],
-                    'advance': int(meta['advance']),
-                    'rows': [],
-                })
-            else:                      # a bitmap block follows its header
-                glyphs[-1]['rows'] = lines
-    return glyphs
+def parse(path):
+    text = open(path).read()
+    meta = dict(re.findall(r'^# (\w+): (\S+)', text, flags=re.M))
+    text = re.sub(r'^#.*\n?', '', text, flags=re.M)
+    glyphs = {}
+    for block in re.split(r'\n\s*\n', text.strip()):
+        lines = [l for l in block.split('\n') if l]
+        if lines[0].startswith('name:'):
+            f = {k.strip(): v.strip() for k, v in (l.split(':', 1) for l in lines)}
+            cur = glyphs[f['name']] = {'unicode': [int(u[2:], 16) for u in f.get('unicode', '').split()],
+                                       'advance': int(f['advance']), 'rows': []}
+        else:
+            cur['rows'] = lines
+    return int(meta['ascent']), glyphs
 
 
-def runs_of(rows):
-    """[(x, y, length)] for each horizontal run; y is the row's bottom edge, baseline = 0."""
+def runs(rows, ascent):
+    """[(x, y, length)] per horizontal run; y is the row's bottom edge, baseline 0."""
     out = []
     for i, line in enumerate(rows):
-        y = ASC - 1 - i
-        x = 0
+        y, x = ascent - 1 - i, 0
         while x < len(line):
             if line[x] == '#':
                 x0 = x
@@ -86,118 +80,155 @@ def runs_of(rows):
     return out
 
 
-def rounded_rect(pen, x0, y0, x1, y1, r):
-    """Clockwise rounded rectangle with 12 points, so square and round masters match."""
-    pen.moveTo((x0 + r, y1))
-    pen.lineTo((x1 - r, y1)); pen.qCurveTo((x1, y1), (x1, y1 - r))
-    pen.lineTo((x1, y0 + r)); pen.qCurveTo((x1, y0), (x1 - r, y0))
-    pen.lineTo((x0 + r, y0)); pen.qCurveTo((x0, y0), (x0, y0 + r))
-    pen.lineTo((x0, y1 - r)); pen.qCurveTo((x0, y1), (x0 + r, y1))
-    pen.closePath()
+# Load every grid.
+grids = {}
+for d in sorted(os.listdir(GLYPHS), key=lambda s: int(s) if s.isdigit() else 0):
+    if not d.isdigit():
+        continue
+    grids[int(d)] = {}
+    for key, *_ in WEIGHTS:
+        ascent, glyphs = parse(os.path.join(GLYPHS, d, key + '.txt'))
+        grids[int(d)][key] = (ascent, glyphs)
+names = [n for n in grids[16]['regular'][1] if n != '.notdef']
+cmap = {cp: n for n in names for cp in grids[16]['regular'][1][n]['unicode']}
+
+# Which sizes are exact, and which grid serves each (the finest one).
+served = {}
+for size in range(opt.min_size, opt.max_size + 1):
+    for grid in sorted(grids, reverse=True):
+        if size % grid == 0:
+            served[size] = grid
+            break
+sizes = sorted(served)
+assert 16 in served, 'the 16-row grid is the default'
+
+# Rectangle count per glyph across every grid, for padding.
+count = {n: max(len(runs(g[n]['rows'], a)) for grid in grids for a, g in grids[grid].values()) for n in names}
 
 
-def rect(pen, x0, y0, x1, y1):
-    pen.moveTo((x0, y1)); pen.lineTo((x1, y1)); pen.lineTo((x1, y0)); pen.lineTo((x0, y0))
-    pen.closePath()
-
-
-def slant_shift(y):
-    """Horizontal pixel shift of the row whose bottom edge is y, at full slant."""
-    return (y // 3) if y >= 0 else -((-y + 2) // 3)
-
-
-def build_master(glyphs, *, smear, slant, radius, style, path):
+def build_master(size, weight_key, style, path):
+    grid = served[size]
+    ascent, glyphs = grids[grid][weight_key]
+    px = UPM / grid
     fb = FontBuilder(UPM, isTTF=True)
-    order = ['.notdef'] + [g['name'] for g in glyphs if g['name'] != '.notdef']
-    fb.setupGlyphOrder(order)
-    fb.setupCharacterMap({cp: g['name'] for g in glyphs for cp in g['unicode']})
+    fb.setupGlyphOrder(['.notdef'] + names)
+    fb.setupCharacterMap(cmap)
     glyf, metrics = {}, {}
-    for g in glyphs:
+    for n in names:
+        g = glyphs[n]
         pen = TTGlyphPen(None)
-        for (x, y, n) in runs_of(g['rows']):
-            dx = slant_shift(y) if slant else 0
-            if opt.primitive == 'runs':
-                rect(pen, (x + dx) * PX, y * PX, (x + dx + n + smear) * PX, (y + 1) * PX)
-            else:
-                for px in range(x, x + n):
-                    rounded_rect(pen, (px + dx) * PX, y * PX, (px + dx + 1 + smear) * PX,
-                                 (y + 1) * PX, int(radius * PX))
+        rs = runs(g['rows'], ascent)
+        for (x, y, w) in rs + [(0, 0, 0)] * (count[n] - len(rs)):
+            x0, x1, y0, y1 = round(x * px), round((x + w) * px), round(y * px), round((y + 1) * px)
+            pen.moveTo((x0, y1)); pen.lineTo((x1, y1)); pen.lineTo((x1, y0)); pen.lineTo((x0, y0))
+            pen.closePath()
         tt = pen.glyph()
         if tt.numberOfContours > 1:
-            tt.flags[0] |= 0x40                    # OVERLAP_SIMPLE: overlaps are intended
-        glyf[g['name']] = tt
-        lsb = min(c[0] for c in tt.coordinates) if tt.numberOfContours else 0
-        metrics[g['name']] = ((g['advance'] + smear) * PX, lsb)
-    if '.notdef' not in glyf:
-        pen = TTGlyphPen(None)
-        rect(pen, PX, 0, 6 * PX, CAP * PX)
-        glyf['.notdef'] = pen.glyph()
-        metrics['.notdef'] = (7 * PX, PX)
+            tt.flags[0] |= 0x40                       # OVERLAP_SIMPLE
+        glyf[n] = tt
+        lsb = min((c[0] for c in tt.coordinates), default=0) if rs else 0
+        metrics[n] = (round(g['advance'] * px), lsb)
+    pen = TTGlyphPen(None)
+    pen.moveTo((round(px), 0)); pen.lineTo((round(6 * px), 0)); pen.lineTo((round(6 * px), round(7 * px)))
+    pen.lineTo((round(px), round(7 * px))); pen.closePath()
+    glyf['.notdef'] = pen.glyph()
+    metrics['.notdef'] = (round(7 * px), round(px))
+    asc, desc = round(ascent * px), round((grid - ascent) * px)
     fb.setupGlyf(glyf)
     fb.setupHorizontalMetrics(metrics)
-    fb.setupHorizontalHeader(ascent=ASC * PX, descent=-DESC * PX, lineGap=0)
-    ps = opt.family.replace(' ', '')
+    fb.setupHorizontalHeader(ascent=asc, descent=-desc, lineGap=0)
     fb.setupNameTable({
-        'familyName': opt.family, 'styleName': style,
-        'uniqueFontIdentifier': f'{opt.family} {style} {VERSION}',
-        'fullName': f'{opt.family} {style}', 'psName': f'{ps}-{style.replace(" ", "")}',
-        'version': f'Version {VERSION}',
+        'familyName': FAMILY, 'styleName': style,
+        'uniqueFontIdentifier': f'{FAMILY} {style} {VERSION}', 'fullName': f'{FAMILY} {style}',
+        'psName': f'{FAMILY}-{style.replace(" ", "")}', 'version': f'Version {VERSION}',
+        'copyright': 'Drawings derived from Pixel Operator (Jayvee Enaguas, CC0 1.0).',
     })
-    fb.setupOS2(version=4, sTypoAscender=ASC * PX, sTypoDescender=-DESC * PX, sTypoLineGap=0,
-                usWinAscent=ASC * PX, usWinDescent=DESC * PX, sxHeight=XHEIGHT * PX,
-                sCapHeight=CAP * PX, fsSelection=0x80 | 0x40, fsType=0,
-                achVendID='ARFT')
-    fb.setupPost(isFixedPitch=0)
+    xh = 5 if grid < 12 else 7
+    cap = 7 if grid < 12 else 9
+    fb.setupOS2(version=4, sTypoAscender=asc, sTypoDescender=-desc, sTypoLineGap=0,
+                usWinAscent=asc, usWinDescent=desc, sxHeight=round(xh * px), sCapHeight=round(cap * px),
+                fsSelection=0x80 | (0x20 if weight_key == 'bold' else 0x40), fsType=0,
+                usWeightClass=700 if weight_key == 'bold' else 400, achVendID='ARFT')
+    fb.setupPost()
     fb.save(path)
 
 
-glyphs = parse_sources(opt.glyphs)
 ds = DesignSpaceDocument()
+size_map = []
+for i, s in enumerate(sizes):
+    size_map.append((s, i))
+    if i + 1 < len(sizes):
+        size_map.append((sizes[i + 1] - 0.01, i))
+ds.addAxis(AxisDescriptor(tag='opsz', name='Size', minimum=sizes[0], default=16, maximum=sizes[-1],
+                          map=size_map))
 ds.addAxis(AxisDescriptor(tag='wght', name='Weight', minimum=400, default=400, maximum=700,
-                          map=[(400, 0), (700, 1)]))
-ds.addAxis(AxisDescriptor(tag='slnt', name='Slant', minimum=-18, default=0, maximum=0,
-                          map=[(0, 0), (-18, 1)]))
-if opt.primitive == 'pixels':
-    ds.addAxis(AxisDescriptor(tag='ROND', name='Roundness', minimum=0, default=0, maximum=100,
-                              map=[(0, 0), (100, 1)]))
+                          map=[(400, 0), (549.99, 0), (550, 1), (700, 1)]))
+for s in sizes:
+    for key, style, _, w in WEIGHTS:
+        path = os.path.join(opt.out, 'masters', f'{s}-{key}.ttf')
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        build_master(s, key, style, path)
+        ds.addSource(SourceDescriptor(path=path, name=f'{s} {style}',
+                                      location={'Size': sizes.index(s), 'Weight': w},
+                                      familyName=FAMILY, styleName=style))
+for key, style, _, w in WEIGHTS:
+    ds.addInstance(InstanceDescriptor(familyName=FAMILY, styleName=style,
+                                      location={'Size': sizes.index(16), 'Weight': w}))
 
-# Sparse masters: every axis is independent, so one master per axis end is enough.
-masters = [
-    dict(style='Regular', smear=0, slant=0, radius=0, loc={'Weight': 0}),
-    dict(style='Bold', smear=1, slant=0, radius=0, loc={'Weight': 1}),
-    dict(style='Slanted', smear=0, slant=1, radius=0, loc={'Slant': 1}),
-]
-if opt.primitive == 'pixels':
-    masters.append(dict(style='Round', smear=0, slant=0, radius=0.5, loc={'Roundness': 1}))
-for m in masters:
-    path = os.path.join(opt.out, f'master-{m["style"].lower()}.ttf')
-    build_master(glyphs, smear=m['smear'], slant=m['slant'], radius=m['radius'],
-                 style=m['style'], path=path)
-    ds.addSource(SourceDescriptor(path=path, name=m['style'], location=m['loc'],
-                                  familyName=opt.family, styleName=m['style']))
-for style, w, s in [('Regular', 0, 0), ('Medium', 0.5, 0), ('Bold', 1, 0),
-                    ('Italic', 0, 1), ('Bold Italic', 1, 1)]:
-    ds.addInstance(InstanceDescriptor(familyName=opt.family, styleName=style,
-                                      location={'Weight': w, 'Slant': s}))
 
+
+def _exact_supports(self):
+    """Give every master a tent bounded by its neighbours on each axis.
+
+    fontTools extends a master's tent to the end of the axis and makes later
+    masters compensate, which is exact in real arithmetic but leaves the
+    renderer summing a dozen fixed-point scalars at every exact size. With
+    neighbour-bounded tents, at a master location every scalar is exactly 0
+    or 1, so each size renders its own drawing to the unit."""
+    values = {}
+    for loc in self.locations:
+        for axis, v in loc.items():
+            values.setdefault(axis, {0.0}).add(v)
+    values = {a: sorted(vs) for a, vs in values.items()}
+    supports = []
+    for loc in self.locations:
+        support = {}
+        for axis, v in loc.items():
+            if v == 0:
+                continue
+            vs = values[axis]
+            i = vs.index(v)
+            lower = vs[i - 1] if i > 0 else -1.0
+            upper = vs[i + 1] if i + 1 < len(vs) else 1.0
+            support[axis] = (max(lower, 0.0), v, upper) if v > 0 else (lower, v, min(upper, 0.0))
+        supports.append(support)
+    self.supports = supports
+    self._computeDeltaWeights()
+
+
+models.VariationModel._computeMasterSupports = _exact_supports
 vf, _, _ = varLib.build(ds)
-vf['OS/2'].usWeightClass = 400
 buildStatTable(vf, [
+    {'tag': 'opsz', 'name': 'Size', 'values': [
+        {'value': s, 'name': f'{s}', **({'flags': 0x2} if s == 16 else {})} for s in sizes]},
     {'tag': 'wght', 'name': 'Weight', 'values': [
         {'value': 400, 'name': 'Regular', 'flags': 0x2, 'linkedValue': 700},
-        {'value': 500, 'name': 'Medium'},
         {'value': 700, 'name': 'Bold'}]},
-    {'tag': 'slnt', 'name': 'Slant', 'values': [
-        {'value': 0, 'name': 'Upright', 'flags': 0x2, 'linkedValue': -18},
-        {'value': -18, 'name': 'Italic'}]},
-] + ([{'tag': 'ROND', 'name': 'Roundness', 'values': [
-        {'value': 0, 'name': 'Square', 'flags': 0x2},
-        {'value': 100, 'name': 'Dots'}]}] if opt.primitive == 'pixels' else []))
-with open(os.path.join(opt.out, 'charset.txt'), 'w') as fh:   # for the specimen page
-    fh.write(''.join(chr(cp) for g in glyphs for cp in sorted(g['unicode']) if cp >= 0x20))
-base = os.path.join(opt.out, f'{opt.family.replace(" ", "")}-VF')
+])
+gasp = newTable('gasp')                     # Windows GDI: no grayscale, just the bitmap
+gasp.version = 1
+gasp.gaspRange = {0xFFFF: 0x0001}
+vf['gasp'] = gasp
+vf['head'].flags |= 0x0008                  # integer ppem
+base = os.path.join(opt.out, f'{FAMILY}-VF')
 vf.save(base + '.ttf')
 vf.flavor = 'woff2'
 vf.save(base + '.woff2')
-print(f'{len(vf.getGlyphOrder())} glyphs, {opt.primitive}: '
-      f'{os.path.getsize(base + ".ttf")} B ttf, {os.path.getsize(base + ".woff2")} B woff2')
+with open(os.path.join(opt.out, 'charset.txt'), 'w') as fh:        # for the specimen page
+    fh.write(''.join(chr(cp) for cp in sorted(cmap) if cp >= 0x20))
+with open(os.path.join(opt.out, 'sizes.json'), 'w') as fh:
+    json.dump({'exact': {s: served[s] for s in sizes}, 'grids': sorted(grids)}, fh)
+print(f'{len(names)} glyphs, grids {sorted(grids)}, {len(sizes)} exact sizes x {len(WEIGHTS)} weights '
+      f'= {len(sizes) * len(WEIGHTS)} masters; ttf {os.path.getsize(base + ".ttf") / 1e6:.2f} MB, '
+      f'woff2 {os.path.getsize(base + ".woff2") / 1e3:.0f} KB')
+print('exact sizes:', ', '.join(f'{s} ({served[s]}×{s // served[s]})' for s in sizes))

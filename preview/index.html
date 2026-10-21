@@ -8,67 +8,77 @@
     font-family: "Integer";
     src: url(../build/Integer-VF.woff2) format("woff2");
     font-weight: 400 700;
-    font-style: oblique 0deg 18deg;
   }
-  :root { color-scheme: light dark; --ink: #000; --paper: #fff; --mute: #666; }
-  @media (prefers-color-scheme: dark) { :root { --ink: #fff; --paper: #000; --mute: #999; } }
+  :root { color-scheme: light dark; --ink: #000; --paper: #fff; --mute: #777; --ok: #080; --no: #c00; }
+  @media (prefers-color-scheme: dark) { :root { --ink: #fff; --paper: #000; --mute: #999; --ok: #4c4; --no: #f66; } }
   body { margin: 0; background: var(--paper); color: var(--ink); font: 13px/1.4 system-ui, sans-serif; }
-  .controls { position: sticky; top: 0; background: var(--paper); border-bottom: 1px solid var(--mute);
-    padding: 12px 16px; display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; }
-  .controls label { display: flex; align-items: center; gap: 8px; }
-  .controls input[type=range] { width: 140px; }
-  .controls output { font-variant-numeric: tabular-nums; min-width: 3ch; display: inline-block; }
-  #crisp { color: var(--mute); }
-  #crisp.yes { color: #0a0; }
-  main { padding: 16px; }
-  .sample { font-family: "Integer"; -webkit-font-smoothing: none; margin: 0 0 8px;
-    font-size: var(--size); line-height: 1; font-weight: var(--wght);
-    font-variation-settings: "slnt" var(--slnt), "ROND" var(--rond); white-space: pre-wrap; }
-  .ladder .sample { --wght: attr(data-wght type(<number>), 400); }
-  h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--mute); margin: 24px 0 8px; }
-  textarea { width: 100%; box-sizing: border-box; font: inherit; }
+  header { position: sticky; top: 0; background: var(--paper); border-bottom: 1px solid var(--mute);
+    padding: 10px 16px; display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center; }
+  header label { display: flex; align-items: center; gap: 6px; }
+  header input[type=text] { width: 32em; max-width: 60vw; font: inherit; }
+  main { padding: 12px 16px 48px; }
+  .marker { height: 4px; background: #f0f; margin: 0 0 8px; }
+  .row { display: grid; grid-template-columns: 17em 1fr; gap: 8px; align-items: baseline; margin: 0 0 6px; }
+  .meta { font-variant-numeric: tabular-nums; color: var(--mute); white-space: nowrap; }
+  .meta b { color: var(--ink); font-weight: 600; }
+  .meta .ok { color: var(--ok); } .meta .no { color: var(--no); }
+  .t { font-family: "Integer"; font-optical-sizing: auto; -webkit-font-smoothing: none;
+    line-height: 1; white-space: pre; }
+  .t.aa { -webkit-font-smoothing: auto; }
+  h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--mute); margin: 28px 0 10px; }
 </style>
-<div class="controls">
-  <label>Size <input type="range" id="size" min="8" max="96" value="16" step="1"> <output id="size-out">16</output>px
-    <span id="crisp"></span></label>
-  <label>Weight <input type="range" id="wght" min="400" max="700" value="400" step="10"> <output id="wght-out">400</output></label>
-  <label>Slant <input type="range" id="slnt" min="-18" max="0" value="0" step="1"> <output id="slnt-out">0</output>°</label>
-  <label>Round <input type="range" id="rond" min="0" max="100" value="0" step="5"> <output id="rond-out">0</output></label>
-</div>
+<header>
+  <label>Text <input type="text" id="text" value="Hamburgefonstiv 0123456789 @&amp;% Åéîõü “quotes”"></label>
+  <label><input type="checkbox" id="bold"> Bold</label>
+  <label><input type="checkbox" id="aa"> Let macOS smooth (shows the fringe)</label>
+  <span class="meta" id="dpr"></span>
+</header>
 <main>
-  <h2>Weight ladder (400 to 700) at the chosen size</h2>
-  <div class="ladder" id="ladder"></div>
-  <h2>Your text</h2>
-  <textarea id="text" rows="3">The quick brown fox jumps over the lazy dog. 0123456789 @&amp;% Åéîõü — “quotes” ©®™</textarea>
-  <p class="sample" id="free"></p>
-  <h2>Every mapped character</h2>
-  <p class="sample" id="all"></p>
+  <div class="marker"></div>
+  <h2>Every size from 8 to 48</h2>
+  <div id="ladder"></div>
+  <h2>A paragraph at 16, Regular and Bold</h2>
+  <p class="t" style="font-size:16px;line-height:16px">The quick brown fox jumps over the lazy dog.
+<b>The quick brown fox jumps over the lazy dog.</b>
+Pack my box with five dozen liquor jugs. 0123456789
+¡Hola! Ça va? Grüße — “Integer” © 2026</p>
+  <h2>Every mapped character at 16</h2>
+  <p class="t" style="font-size:16px;line-height:16px;white-space:pre-wrap" id="all"></p>
 </main>
 <script>
-  const root = document.documentElement.style;
   const el = id => document.getElementById(id);
-  const ladder = el('ladder');
-  for (const w of [400, 450, 500, 550, 600, 650, 700]) {
-    const p = document.createElement('p');
-    p.className = 'sample'; p.style.setProperty('--wght', w);
-    p.textContent = `${w}  Hamburgefonstiv — The quick brown fox jumps over the lazy dog`;
-    ladder.append(p);
+  const dpr = devicePixelRatio;
+  el('dpr').textContent = `devicePixelRatio ${dpr}`;
+  let sizes = null;
+  fetch('../build/sizes.json').then(r => r.json()).then(j => { sizes = j; render(); });
+  function render() {
+    const ladder = el('ladder'); ladder.innerHTML = '';
+    for (let s = 8; s <= 48; s++) {
+      const grid = sizes && sizes.exact[s];
+      const row = document.createElement('div'); row.className = 'row';
+      const meta = document.createElement('div'); meta.className = 'meta';
+      if (grid) {
+        const dev = s * dpr / grid;
+        const ok = Number.isInteger(+dev.toFixed(6));
+        meta.innerHTML = `<b>${s}px</b> ${grid}-row ×${s / grid} <span class="${ok ? 'ok' : 'no'}">${ok ? dev + ' device px' : 'off at ' + dpr + '×'}</span>`;
+      } else {
+        meta.innerHTML = `<b>${s}px</b> <span class="no">no drawing: resampled</span>`;
+      }
+      const t = document.createElement('div'); t.className = 't' + (el('aa').checked ? ' aa' : '');
+      t.style.fontSize = s + 'px'; t.style.fontWeight = el('bold').checked ? 700 : 400;
+      t.textContent = el('text').value;
+      row.append(meta, t); ladder.append(row);
+    }
   }
-  function update() {
-    for (const k of ['size', 'wght', 'slnt', 'rond']) el(k + '-out').value = el(k).value;
-    root.setProperty('--size', el('size').value + 'px');
-    root.setProperty('--wght', el('wght').value);
-    root.setProperty('--slnt', el('slnt').value);
-    root.setProperty('--rond', el('rond').value);
-    const dev = el('size').value * devicePixelRatio;
-    const crisp = Number.isInteger(dev / 16);
-    el('crisp').textContent = crisp ? `crisp: ${dev / 16} device px per font px` : `blurry at ${devicePixelRatio}x (needs a multiple of ${16 / devicePixelRatio}px)`;
-    el('crisp').className = crisp ? 'yes' : '';
-    el('free').textContent = el('text').value;
-  }
-  for (const k of ['size', 'wght', 'slnt', 'rond', 'text']) el(k).addEventListener('input', update);
-  fetch('../build/charset.txt').then(r => r.text()).then(t => { el('all').textContent = [...t].sort((a, b) => a.codePointAt(0) - b.codePointAt(0)).join(''); });
-  document.fonts.load('16px "Integer"').then(update);
-  update();
+  for (const id of ['text', 'bold', 'aa']) el(id).addEventListener('input', render);
+  fetch('../build/Integer-VF.woff2').then(() => document.fonts.load('16px "Integer"')).then(() => {
+    let s = '';
+    for (const cp of [...Array(0x2200).keys()].slice(0x20)) {
+      if (cp === 0x7f || (cp >= 0x80 && cp <= 0x9f)) continue;
+      // The font has a glyph if the browser does not fall back: compare advance against a size-0 fallback trick is unreliable, so use the charset file.
+    }
+    fetch('../build/charset.txt').then(r => r.ok ? r.text() : '').then(t => { el('all').textContent = t; });
+  });
+  render();
 </script>
 </html>
