@@ -1,6 +1,6 @@
-# Integer
+# Integer Sans
 
-Integer is a variable pixel font built from text bitmaps, where every rendered instance is a real drawing and every value is a whole number. The size axis is stepped: it holds a drawing per pixel grid (8 and 16 rows today) and the browser picks one from the font-size, never an interpolation. The weight axis steps the same way between 1px and 2px stems. The grids and metrics are those of the System Six faces, so it drops in where Pixel Operator is used today.
+Integer Sans is a variable pixel font in which every value is a whole number: every rendered instance is a real drawing on a pixel grid. The size axis holds a drawing per grid (8, 9, 10, 11, 12, 14, and 16 rows) and the browser picks one from the font-size, never an interpolation; multiples of a grid (18, 20, 22, 24, 28, 32, 36, 40, 44, 48) reuse its drawing at a whole scale. The weight axis steps the same way between 1px and 2px stems. The 8- and 16-row grids are the System Six faces; the others are derived from them and open to hand editing.
 
 The design, its reasoning, and the roadmap are in [docs/design.md](docs/design.md).
 
@@ -8,7 +8,7 @@ The design, its reasoning, and the roadmap are in [docs/design.md](docs/design.m
 
 ```bash
 uv venv && uv pip install 'fonttools[woff]' pillow
-.venv/bin/python scripts/build.py     # build/Integer-VF.ttf and .woff2
+.venv/bin/python scripts/build.py     # build/IntegerSans-VF.ttf and .woff2
 .venv/bin/python scripts/check.py     # renders every exact size through FreeType; fails on any gray pixel
 ```
 
@@ -17,8 +17,8 @@ uv venv && uv pip install 'fonttools[woff]' pillow
 ## Use
 
 ```css
-@font-face { font-family: "Integer"; src: url(Integer-VF.woff2); font-weight: 400 700; }
-.pixel { font-family: "Integer"; -webkit-font-smoothing: none; }
+@font-face { font-family: "Integer Sans"; src: url(IntegerSans-VF.woff2); font-weight: 400 700; }
+.pixel { font-family: "Integer Sans"; -webkit-font-smoothing: none; }
 ```
 
 A font-size that is a whole multiple of a grid is exact at 1×; at 2× every whole font-size from 8 up with a drawing is exact. Sizes between drawings resample the nearest smaller one. Leave `font-optical-sizing` at its default (`auto`) so the size picks the drawing.

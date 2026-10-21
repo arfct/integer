@@ -2,11 +2,11 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Integer specimen</title>
+<title>Integer Sans specimen</title>
 <style>
   @font-face {
-    font-family: "Integer";
-    src: url(out/Integer-VF.woff2) format("woff2");
+    font-family: "Integer Sans";
+    src: url(out/IntegerSans-VF.woff2) format("woff2");
     font-weight: 400 700;
     font-style: oblique 0deg 18deg;
   }
@@ -21,7 +21,7 @@
   #crisp { color: var(--mute); }
   #crisp.yes { color: #0a0; }
   main { padding: 16px; }
-  .sample { font-family: "Integer"; -webkit-font-smoothing: none; margin: 0 0 8px;
+  .sample { font-family: "Integer Sans"; -webkit-font-smoothing: none; margin: 0 0 8px;
     font-size: var(--size); line-height: 1; font-weight: var(--wght);
     font-variation-settings: "slnt" var(--slnt), "ROND" var(--rond); white-space: pre-wrap; }
   .ladder .sample { --wght: attr(data-wght type(<number>), 400); }
@@ -68,7 +68,7 @@
   }
   for (const k of ['size', 'wght', 'slnt', 'rond', 'text']) el(k).addEventListener('input', update);
   fetch('out/charset.txt').then(r => r.text()).then(t => { el('all').textContent = [...t].sort((a, b) => a.codePointAt(0) - b.codePointAt(0)).join(''); });
-  document.fonts.load('16px "Integer"').then(update);
+  document.fonts.load('16px "Integer Sans"').then(update);
   update();
 </script>
 </html>

@@ -1,4 +1,4 @@
-"""Build Integer: a variable pixel font in which every instance is a real bitmap.
+"""Build Integer Sans: a variable pixel font in which every instance is a real bitmap.
 
     python scripts/build.py [--out build] [--max-size 48]
 
@@ -33,7 +33,7 @@ from fontTools.otlLib.builder import buildStatTable
 from fontTools.pens.ttGlyphPen import TTGlyphPen
 from fontTools.ttLib import newTable
 
-FAMILY = 'Integer'
+FAMILY = 'Integer Sans'
 VERSION = '0.2'
 UPM = 5040                      # divisible by 8, 9, 10, 12, 14, 16; 11 rounds by 0.04%
 WEIGHTS = [('regular', 'Regular', 400, 0), ('bold', 'Bold', 700, 1)]
@@ -140,7 +140,7 @@ def build_master(size, weight_key, style, path):
     fb.setupNameTable({
         'familyName': FAMILY, 'styleName': style,
         'uniqueFontIdentifier': f'{FAMILY} {style} {VERSION}', 'fullName': f'{FAMILY} {style}',
-        'psName': f'{FAMILY}-{style.replace(" ", "")}', 'version': f'Version {VERSION}',
+        'psName': f'{FAMILY.replace(" ", "")}-{style.replace(" ", "")}', 'version': f'Version {VERSION}',
         'copyright': 'Drawings derived from Pixel Operator (Jayvee Enaguas, CC0 1.0).',
     })
     xh = 5 if grid < 12 else 7
@@ -220,7 +220,7 @@ gasp.version = 1
 gasp.gaspRange = {0xFFFF: 0x0001}
 vf['gasp'] = gasp
 vf['head'].flags |= 0x0008                  # integer ppem
-base = os.path.join(opt.out, f'{FAMILY}-VF')
+base = os.path.join(opt.out, f'{FAMILY.replace(" ", "")}-VF')
 vf.save(base + '.ttf')
 vf.flavor = 'woff2'
 vf.save(base + '.woff2')

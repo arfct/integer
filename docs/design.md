@@ -1,6 +1,6 @@
-# Integer: a variable pixel font
+# Integer Sans: a variable pixel font
 
-_Working design, October 2026. The font is named Integer. `scripts/build.py` builds the stepped model across seven grids and every exact size to 48, and `scripts/check.py` proves each instance is a bitmap through FreeType. The continuous prototype lives in `experiments/continuous/`. The character set, bold tuning, and hand correction of the derived grids are open._
+_Working design, October 2026. The font is named Integer Sans. `scripts/build.py` builds the stepped model across seven grids and every exact size to 48, and `scripts/check.py` proves each instance is a bitmap through FreeType. The continuous prototype lives in `experiments/continuous/`. The character set, bold tuning, and hand correction of the derived grids are open._
 
 ## Thesis: a pixel font is a bundle of drawings, and a variable font is the modern bundle
 
@@ -155,6 +155,6 @@ All of the variable ones interpolate pixel shapes, which is the overlap effect. 
 
 ## Open decisions
 
-- **License** (MIT per the org default, or OFL like every peer font). The name is Integer: every value in the font is a whole number.
+- **License** (MIT per the org default, or OFL like every peer font). The name is Integer Sans: every value in the font is a whole number.
 - **Does `opsz` mean CSS pixels or device pixels** for the consumers we control. CSS pixels is the standard; device pixels is what crispness wants on 1.5× displays.
 - **Which grids** beyond 8, 12, and 16.

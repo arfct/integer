@@ -1,6 +1,6 @@
-"""Render Integer through FreeType at every exact size and prove it is a bitmap.
+"""Render Integer Sans through FreeType at every exact size and prove it is a bitmap.
 
-    python scripts/check.py [--font build/Integer-VF.ttf] [--png build/proof.png]
+    python scripts/check.py [--font build/IntegerSans-VF.ttf] [--png build/proof.png]
 
 Antialiasing is on; a size passes when no pixel is gray. The PNG shows every
 exact size, Regular and Bold, magnified 3x with nearest-neighbour so the real
@@ -14,7 +14,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 args = argparse.ArgumentParser()
-args.add_argument('--font', default=os.path.join(HERE, '..', 'build', 'Integer-VF.ttf'))
+args.add_argument('--font', default=os.path.join(HERE, '..', 'build', 'IntegerSans-VF.ttf'))
 args.add_argument('--png', default=os.path.join(HERE, '..', 'build', 'proof.png'))
 args.add_argument('--text', default='Hamburgefonstiv 0123 @&% Åéîõü')
 opt = args.parse_args()

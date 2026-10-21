@@ -1,4 +1,4 @@
-# Integer, 8-row grid, regular. Imported from Pixel Operator 8 (Jayvee Enaguas, CC0 1.0)
+# Integer Sans, 8-row grid, regular. Imported from Pixel Operator 8 (Jayvee Enaguas, CC0 1.0)
 # by scripts/import-pixel-operator.py. "#" is ink, "." is clear; the bitmap is as wide as the
 # advance plus one spare column. Edit freely: this file is the source.
 # grid: 8

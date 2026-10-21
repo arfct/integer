@@ -1,4 +1,4 @@
-# Integer, 12-row grid, regular. Derived from the 16-row drawings by scripts/derive.py ({'lead_remove': 3, 'desc_remove': 1}).
+# Integer Sans, 12-row grid, regular. Derived from the 16-row drawings by scripts/derive.py ({'lead_remove': 3, 'desc_remove': 1}).
 # grid: 12
 # ascent: 10
 # "#" is ink, "." is clear. Edit freely: this file is the source.

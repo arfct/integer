@@ -40,7 +40,7 @@ def parse(path):
 def write(path, grid, ascent, glyphs, note):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, 'w') as fh:
-        fh.write(f'# Integer, {grid}-row grid, {os.path.basename(path)[:-4]}. {note}\n'
+        fh.write(f'# Integer Sans, {grid}-row grid, {os.path.basename(path)[:-4]}. {note}\n'
                  f'# grid: {grid}\n# ascent: {ascent}\n'
                  '# "#" is ink, "." is clear. Edit freely: this file is the source.\n\n')
         for g in glyphs:

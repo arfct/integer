@@ -2,11 +2,11 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Integer specimen</title>
+<title>Integer Sans specimen</title>
 <style>
   @font-face {
-    font-family: "Integer";
-    src: url(../build/Integer-VF.woff2) format("woff2");
+    font-family: "Integer Sans";
+    src: url(../build/IntegerSans-VF.woff2) format("woff2");
     font-weight: 400 700;
   }
   :root { color-scheme: light dark; --ink: #000; --paper: #fff; --mute: #777; --ok: #080; --no: #c00; }
@@ -22,7 +22,7 @@
   .meta { font-variant-numeric: tabular-nums; color: var(--mute); white-space: nowrap; }
   .meta b { color: var(--ink); font-weight: 600; }
   .meta .ok { color: var(--ok); } .meta .no { color: var(--no); }
-  .t { font-family: "Integer"; font-optical-sizing: auto; -webkit-font-smoothing: none;
+  .t { font-family: "Integer Sans"; font-optical-sizing: auto; -webkit-font-smoothing: none;
     line-height: 1; white-space: pre; }
   .t.aa { -webkit-font-smoothing: auto; }
   h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--mute); margin: 28px 0 10px; }
@@ -41,7 +41,7 @@
   <p class="t" style="font-size:16px;line-height:16px">The quick brown fox jumps over the lazy dog.
 <b>The quick brown fox jumps over the lazy dog.</b>
 Pack my box with five dozen liquor jugs. 0123456789
-¡Hola! Ça va? Grüße — “Integer” © 2026</p>
+¡Hola! Ça va? Grüße — “Integer Sans” © 2026</p>
   <h2>Every mapped character at 16</h2>
   <p class="t" style="font-size:16px;line-height:16px;white-space:pre-wrap" id="all"></p>
 </main>
@@ -71,7 +71,7 @@ Pack my box with five dozen liquor jugs. 0123456789
     }
   }
   for (const id of ['text', 'bold', 'aa']) el(id).addEventListener('input', render);
-  fetch('../build/Integer-VF.woff2').then(() => document.fonts.load('16px "Integer"')).then(() => {
+  fetch('../build/IntegerSans-VF.woff2').then(() => document.fonts.load('16px "Integer Sans"')).then(() => {
     let s = '';
     for (const cp of [...Array(0x2200).keys()].slice(0x20)) {
       if (cp === 0x7f || (cp >= 0x80 && cp <= 0x9f)) continue;
