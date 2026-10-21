@@ -7,7 +7,7 @@
   @font-face {
     font-family: "Integer Sans";
     src: url(../build/IntegerSans-VF.woff2) format("woff2");
-    font-weight: 400 700;
+    font-weight: 200 800;
   }
   :root { color-scheme: light dark; --ink: #000; --paper: #fff; --mute: #777; --ok: #080; --no: #c00; }
   @media (prefers-color-scheme: dark) { :root { --ink: #fff; --paper: #000; --mute: #999; --ok: #4c4; --no: #f66; } }
@@ -29,7 +29,7 @@
 </style>
 <header>
   <label>Text <input type="text" id="text" value="Hamburgefonstiv 0123456789 @&amp;% Åéîõü “quotes”"></label>
-  <label><input type="checkbox" id="bold"> Bold</label>
+  <label>Weight <select id="wght"><option value="200">Light</option><option value="400" selected>Regular</option><option value="800">Bold</option></select></label>
   <label><input type="checkbox" id="aa"> Let macOS smooth (shows the fringe)</label>
   <span class="meta" id="dpr"></span>
 </header>
@@ -37,8 +37,9 @@
   <div class="marker"></div>
   <h2>Every size from 8 to 48</h2>
   <div id="ladder"></div>
-  <h2>A paragraph at 16, Regular and Bold</h2>
-  <p class="t" style="font-size:16px;line-height:16px">The quick brown fox jumps over the lazy dog.
+  <h2>A paragraph at 16: Light, Regular, Bold</h2>
+  <p class="t" style="font-size:16px;line-height:19px"><span style="font-weight:200">The quick brown fox jumps over the lazy dog.</span>
+The quick brown fox jumps over the lazy dog.
 <b>The quick brown fox jumps over the lazy dog.</b>
 Pack my box with five dozen liquor jugs. 0123456789
 ¡Hola! Ça va? Grüße — “Integer Sans” © 2026</p>
@@ -65,12 +66,12 @@ Pack my box with five dozen liquor jugs. 0123456789
         meta.innerHTML = `<b>${s}px</b> <span class="no">no drawing: resampled</span>`;
       }
       const t = document.createElement('div'); t.className = 't' + (el('aa').checked ? ' aa' : '');
-      t.style.fontSize = s + 'px'; t.style.fontWeight = el('bold').checked ? 700 : 400;
+      t.style.fontSize = s + 'px'; t.style.fontWeight = el('wght').value;
       t.textContent = el('text').value;
       row.append(meta, t); ladder.append(row);
     }
   }
-  for (const id of ['text', 'bold', 'aa']) el(id).addEventListener('input', render);
+  for (const id of ['text', 'wght', 'aa']) el(id).addEventListener('input', render);
   fetch('../build/IntegerSans-VF.woff2').then(() => document.fonts.load('16px "Integer Sans"')).then(() => {
     let s = '';
     for (const cp of [...Array(0x2200).keys()].slice(0x20)) {

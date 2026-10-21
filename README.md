@@ -1,18 +1,19 @@
 # Integer Sans
 
-Integer Sans is a variable pixel font in which every value is a whole number: every rendered instance is a real drawing on a pixel grid. The size axis holds a drawing per grid (8, 9, 10, 11, 12, 14, and 16 rows) and the browser picks one from the font-size, never an interpolation; multiples of a grid (18, 20, 22, 24, 28, 32, 36, 40, 44, 48) reuse its drawing at a whole scale. The weight axis steps the same way between 1px and 2px stems. The 8- and 16-row grids are the System Six faces; the others are derived from them and open to hand editing.
+Integer Sans is Inter on a pixel grid, in which every value is a whole number: every rendered instance is a real bitmap. The size axis holds a drawing for every grid from 8 to 24 rows and the browser picks one from the font-size, never an interpolation; larger sizes that are a whole multiple of a grid (26 to 48) reuse its drawing at a whole scale. The weight axis steps between Light, Regular, and Bold, each a whole number of pixels of stem. The drawings are rendered from Inter 4.1 by a reproducible pipeline and corrected by hand in override files.
 
 The design, its reasoning, and the roadmap are in [docs/design.md](docs/design.md).
 
 ## Build
 
 ```bash
-uv venv && uv pip install 'fonttools[woff]' pillow
-.venv/bin/python scripts/build.py     # build/IntegerSans-VF.ttf and .woff2
-.venv/bin/python scripts/check.py     # renders every exact size through FreeType; fails on any gray pixel
+uv venv && uv pip install 'fonttools[woff]' pillow freetype-py
+.venv/bin/python scripts/import-inter.py   # renders glyphs/<grid>/<weight>.txt from vendor/inter (about 20 s)
+.venv/bin/python scripts/build.py          # build/IntegerSans-VF.ttf and .woff2
+.venv/bin/python scripts/check.py          # renders every exact size through FreeType; fails on any gray pixel
 ```
 
-`scripts/derive.py` regenerates the 9, 10, 11, 12, and 14-row sources from the 8- and 16-row ones; it overwrites, so do not run it on grids that have been edited by hand.
+The importer fixes each grid's rows for x-height, cap height, ascender, and descender from Inter's proportions, picks for each weight the Inter weight whose stem is exactly the target number of pixels, warps the outlines so the metric lines land on those rows, and lets FreeType's autohinter snap the stems. Hand fixes go in `glyphs/<grid>/<weight>.overrides.txt`, which the build applies on top and the importer never touches.
 
 ## Use
 
@@ -21,7 +22,7 @@ uv venv && uv pip install 'fonttools[woff]' pillow
 .pixel { font-family: "Integer Sans"; -webkit-font-smoothing: none; }
 ```
 
-A font-size that is a whole multiple of a grid is exact at 1×; at 2× every whole font-size from 8 up with a drawing is exact. Sizes between drawings resample the nearest smaller one. Leave `font-optical-sizing` at its default (`auto`) so the size picks the drawing.
+Every whole font-size from 8 to 24 is exact at 1×, and so is every size from 26 to 48 that is a multiple of a grid; at 2× every whole size from 8 to 48 with a drawing is exact. Sizes with no drawing (25, 29, 31, 35, 37, 41, 43, 47) resample the nearest smaller one. Leave `font-optical-sizing` at its default (`auto`) so the size picks the drawing. `font-weight` 200, 400, and 700 or 800 give Light, Regular, and Bold; Light equals Regular below 23px, where both are one pixel.
 
 ## Preview
 
@@ -29,4 +30,4 @@ Serve the repo root (`python3 -m http.server`) and open `preview/`: every size f
 
 ## Sources
 
-`glyphs/<grid>/{regular,bold}.txt` are the font. Each file names its grid and ascent in a header; each entry is a name, codepoints, an advance in pixels, and a bitmap (`#` ink, `.` clear). The 8- and 16-row drawings were imported from Pixel Operator and Pixel Operator 8 (Jayvee Enaguas, CC0 1.0) with `scripts/import-pixel-operator.py`; the rest were derived and are meant to be corrected by hand.
+`glyphs/<grid>/{light,regular,bold}.txt` are generated from `vendor/inter/InterVariable.ttf` (Inter 4.1, SIL Open Font License 1.1) and committed so every build is reproducible. Each file names its grid, ascent, descent, cap height, and x-height in a header; each entry is a name, codepoint, an advance in pixels, an optional `left` offset, and a bitmap (`#` ink, `.` clear). `charset.txt` lists the codepoints to render. The earlier Pixel Operator drawings live in `experiments/pixel-operator/`.

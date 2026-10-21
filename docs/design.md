@@ -1,6 +1,6 @@
 # Integer Sans: a variable pixel font
 
-_Working design, October 2026. The font is named Integer Sans. `scripts/build.py` builds the stepped model across seven grids and every exact size to 48, and `scripts/check.py` proves each instance is a bitmap through FreeType. The continuous prototype lives in `experiments/continuous/`. The character set, bold tuning, and hand correction of the derived grids are open._
+_Working design, October 2026. The font is named Integer Sans and its drawings are rendered from Inter by `scripts/import-inter.py` (grids 8 to 24, three weights); `scripts/build.py` packs every exact size to 48 into one stepped file and `scripts/check.py` proves each instance is a bitmap through FreeType. The Pixel Operator drawings that started the project live in `experiments/pixel-operator/`. Hand correction of the rendered glyphs, the character set, and kerning are open._
 
 ## Thesis: a pixel font is a bundle of drawings, and a variable font is the modern bundle
 
@@ -55,6 +55,16 @@ A weight is a stem count, and a stem count only means something relative to the 
 Two consequences. **Light does not exist at small grids**: the 16-row 200 is the 400, exactly as the old suitcases had no Light at 9 point. The font says so by giving the 200 master the Regular's drawing, so the step is a no-op rather than an error. **Light appears on dense displays by itself**: 16px text at 2× is 32 device pixels, so if the font has a 32-row drawing, `opsz` 16 on a 2× screen could pick it and render a true 1-device-pixel Light. Whether `opsz` should mean CSS pixels (the CSS rule) or device pixels (what crispness wants) is a consumer decision; System Six already computes its density and can set `font-variation-settings: "opsz" N` explicitly.
 
 Smearing covers 400 → 800 on every grid and matches the historical Bolds. Where it closes a counter (`a`, `e`, `s` at 2px stems in a 5-wide letter), a per-glyph `bold:` bitmap in the source overrides it. Because the axis is stepped, the override has no compatibility constraint beyond rectangle count, which the padding handles. The first prototype's "containment rule" is no longer needed.
+
+## Drawings come from Inter, through a pipeline that fixes the rows first
+
+Integer Sans is Inter on a pixel grid. Inter is a variable font with weight and optical-size axes, so a drawing per grid and weight can be rendered rather than drawn, and the design work moves into three decisions the pipeline makes per grid:
+
+1. **Rows.** X-height, cap height, ascender, and descender are rounded from Inter's proportions at that optical size into whole rows, once per grid, shared by every weight. Overshoots are flattened onto the metric row below about 50 pixels, where they would be under half a pixel.
+2. **Stems.** The weight axis is a stem count in pixels: Regular is round(0.089 × rows), Bold is round(0.15 × rows) and at least one more than Regular, Light is round(0.067 × rows) and at least one. For each target the pipeline bisects Inter's weight axis for the instance whose capital I is exactly that many pixels wide, so small grids render from heavier Inter weights (Inter 569 at 8 rows, 270 at 16, 371 at 24) and stems never need rounding. Where Inter Black is still too light, the bitmap is smeared right by the missing pixels, the classic bold.
+3. **Rendering.** The instance's outlines are warped in y with a piecewise-linear map that puts the metric lines on the chosen rows, then rendered by FreeType's autohinter in monochrome mode with x-height bumping disabled, so the hinter's only remaining job is snapping stems and side bearings horizontally.
+
+The output is the same text bitmap format as before, committed, with an overrides file per grid and weight for hand fixes that regeneration must not lose. The 17 grids from 8 to 24 rows take twenty seconds to render.
 
 ## The grid list is the real design work
 

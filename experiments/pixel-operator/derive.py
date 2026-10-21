@@ -18,7 +18,7 @@ import os
 import re
 import sys
 
-ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'glyphs')
+ROOT = os.path.dirname(os.path.abspath(__file__))
 
 
 def parse(path):
