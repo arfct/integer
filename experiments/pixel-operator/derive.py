@@ -24,7 +24,7 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 def parse(path):
     text = open(path).read()
     meta = dict(re.findall(r'^# (\w+): (\S+)', text, flags=re.M))
-    text = re.sub(r'^#.*\n?', '', text, flags=re.M)
+    text = re.sub(r'^# .*\n?|^#\n', '', text, flags=re.M)
     glyphs = []
     for block in re.split(r'\n\s*\n', text.strip()):
         lines = [l for l in block.split('\n') if l]

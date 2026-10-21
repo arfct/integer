@@ -42,6 +42,8 @@ Browsers set `opsz` from the font-size when `font-optical-sizing: auto` is on (t
 
 **What this model gives up.** Continuous axes. The first prototype has a continuous weight (a 1.5px stem is exactly 3 device pixels at 2×), a slant that shears rows, and a roundness axis that turns pixels into dots. Those are real and cheap, and the roundness one is the trick the existing variable pixel fonts rely on, but they are decorative next to the promise above. They can ship as a separate file. The main font steps.
 
+**One limit of a single file.** Every grid needs the em to be divisible by its row count so that pixel edges are whole font units, and no em under the format's 16384-unit cap is divisible by all of 8 to 24. The build uses 5040, which 8, 9, 10, 12, 14, 15, 16, 18, 20, 21, and 24 divide; for 11, 13, 17, 19, 22, and 23 coordinates round by at most half a unit, under 0.13% of a pixel. An antialiasing renderer turns that into a coverage value within one step of 255, and an aliased one into nothing; the check treats one step as exact and would flag anything larger.
+
 ## Weights are quantized by the grid, and names follow a ratio
 
 A weight is a stem count, and a stem count only means something relative to the letter. Define weight by stem-to-cap-height ratio and round to whole pixels with a floor of one:
