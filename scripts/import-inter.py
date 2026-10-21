@@ -214,32 +214,44 @@ def bitmap_rows(bm):
     return [[bm.buffer[r * bm.pitch + c] for c in range(bm.width)] for r in range(bm.rows)]
 
 
-def thin(rows, cover, limit=0.95):
-    """Pixel-perfect 1px strokes: drop partially covered ink pixels that are not
-    needed to keep the stroke connected (never ends, never full pixels).
+def thin(rows, cover, k=1, h=1, limit=0.95):
+    """Pixel-perfect strokes k pixels wide vertically and h horizontally.
 
-    rows: list of str ('#'/'.'), cover: same shape, 0..1. Removal is in order of
-    least coverage and repeats until stable. A pixel is removable when its ink
-    neighbours stay 8-connected through the 3x3 neighbourhood without it."""
-    h, w = len(rows), len(rows[0]) if rows else 0
+    Drops partially covered ink pixels, least covered first, while the stroke
+    stays 8-connected, no stroke end is shortened, the pixel touches background
+    orthogonally, and the pixel is surplus to the thickness: on a locally
+    steep stroke its horizontal run is longer than k, on a shallow one its
+    vertical run is longer than h. Snapped stems
+    and bars sit at full coverage and are never candidates, so they define the
+    thickness; curves and diagonals are eroded down to it."""
+    hgt, wid = len(rows), len(rows[0]) if rows else 0
     ink = [[c == '#' for c in r] for r in rows]
 
-    def neighbours(y, x):
-        out = []
-        for dy in (-1, 0, 1):
-            for dx in (-1, 0, 1):
-                if (dy or dx) and 0 <= y + dy < h and 0 <= x + dx < w and ink[y + dy][x + dx]:
-                    out.append((dy, dx))
-        return out
+    def on(y, x):
+        return 0 <= y < hgt and 0 <= x < wid and ink[y][x]
 
-    def simple(y, x):
-        """Removable: its ink neighbours stay one 8-connected group without it,
-        it is not a stroke end, and it touches background orthogonally."""
+    def neighbours(y, x):
+        return [(dy, dx) for dy in (-1, 0, 1) for dx in (-1, 0, 1) if (dy or dx) and on(y + dy, x + dx)]
+
+    def run(y, x, dy, dx):
+        n = 1
+        for sgn in (1, -1):
+            yy, xx = y + sgn * dy, x + sgn * dx
+            while on(yy, xx):
+                n += 1
+                yy, xx = yy + sgn * dy, xx + sgn * dx
+        return n
+
+    def removable(y, x):
         ns = neighbours(y, x)
         if len(ns) < 2:
-            return False
-        if all(0 <= y + dy < h and 0 <= x + dx < w and ink[y + dy][x + dx] for dy, dx in ((-1, 0), (1, 0), (0, -1), (0, 1))):
-            return False                      # interior pixel: removal would open a hole
+            return False                      # a stroke end
+        if all(on(y + dy, x + dx) for dy, dx in ((-1, 0), (1, 0), (0, -1), (0, 1))):
+            return False                      # interior: removal would open a hole
+        rh, rv = run(y, x, 0, 1), run(y, x, 1, 0)
+        steep = rv >= rh                      # locally vertical-ish: thickness is the horizontal run
+        if not (rh > k if steep else rv > h):
+            return False                      # not surplus to the thickness
         groups = []
         for n in ns:
             joined = [gi for gi, grp in enumerate(groups) if any(abs(n[0] - m[0]) <= 1 and abs(n[1] - m[1]) <= 1 for m in grp)]
@@ -253,21 +265,40 @@ def thin(rows, cover, limit=0.95):
     changed = True
     while changed:
         changed = False
-        cands = sorted(((cover[y][x], y, x) for y in range(h) for x in range(w)
+        cands = sorted(((cover[y][x], y, x) for y in range(hgt) for x in range(wid)
                         if ink[y][x] and cover[y][x] < limit), key=lambda t: t[0])
         for c, y, x in cands:
-            if ink[y][x] and simple(y, x):
+            if ink[y][x] and removable(y, x):
                 ink[y][x] = False
                 changed = True
     return [''.join('#' if v else '.' for v in r) for r in ink]
 
 
-def render_font(path, grid, smear, pixel_perfect):
+def bitmap_rows_of_H(path, grid):
+    face = freetype.Face(path)
+    face.set_pixel_sizes(0, grid)
+    face.load_char('H', freetype.FT_LOAD_TARGET_MONO | freetype.FT_LOAD_FORCE_AUTOHINT)
+    face.glyph.render(freetype.FT_RENDER_MODE_MONO)
+    return bitmap_rows(face.glyph.bitmap)
+
+
+def bar_thickness(rows_H):
+    """Rows of ink in the crossbar of a rendered H: the horizontal stem in pixels."""
+    if not rows_H:
+        return 1
+    mid = len(rows_H[0]) // 2
+    return max(1, sum(1 for r in rows_H if r[mid] == '#'))
+
+
+def render_font(path, grid, smear, stem):
     face = freetype.Face(path)
     prop = _XHeightProp(ctypes.cast(face._FT_Face, ctypes.c_void_p).value, 0)
     freetype.raw.FT_Property_Set(freetype.get_handle(), b'autofitter', b'increase-x-height', ctypes.byref(prop))
     face.set_pixel_sizes(0, grid)
     flags = freetype.FT_LOAD_TARGET_MONO | freetype.FT_LOAD_FORCE_AUTOHINT
+    face.load_char('H', flags)
+    face.glyph.render(freetype.FT_RENDER_MODE_MONO)
+    bar = bar_thickness(bitmap_rows(face.glyph.bitmap))
     out = {}
     for cp in charset:
         face.load_char(cp, flags)
@@ -275,7 +306,7 @@ def render_font(path, grid, smear, pixel_perfect):
         g.render(freetype.FT_RENDER_MODE_MONO)
         rows, left, top = bitmap_rows(g.bitmap), g.bitmap_left, g.bitmap_top
         adv = (g.advance.x + 32) // 64
-        if pixel_perfect and rows:
+        if rows:
             face.load_char(cp, flags)
             g = face.glyph
             g.render(freetype.FT_RENDER_MODE_NORMAL)
@@ -286,7 +317,7 @@ def render_font(path, grid, smear, pixel_perfect):
                     yy, xx = y + (top - gt), x + (gl - left)
                     if 0 <= yy < len(rows) and 0 <= xx < len(rows[0]):
                         cover[yy][xx] = v / 255.0
-            rows = thin(rows, cover)
+            rows = thin(rows, cover, k=stem, h=bar)
         if smear and rows:
             rows = [''.join('#' if any(line[i - k] == '#' for k in range(0, smear + 1) if 0 <= i - k < len(line)) else '.'
                             for i in range(len(line) + smear)) for line in rows]
@@ -335,8 +366,8 @@ for grid in grids:
         warp_font(font, pts)
         path = os.path.join(tmp, f'inter-{grid}-{weight}.ttf')
         font.save(path)
-        rendered[weight] = render_font(path, grid, smear, pixel_perfect=(px == 1))
-        notes[weight] = f'opsz {opsz}, wght {wght}, stem {px}px' + (f', smear {smear}' if smear else '')
+        rendered[weight] = render_font(path, grid, smear, stem=px - smear)
+        notes[weight] = f'opsz {opsz}, wght {wght}, stem {px}px, bar {bar_thickness(bitmap_rows_of_H(path, grid))}px' + (f', smear {smear}' if smear else '')
     # One line box per grid, shared by every weight.
     ascent = max([m['asc'] + 1] + [top for r in rendered.values() for rows, _, top, _ in r.values() if rows])
     descent = max([m['desc']] + [len(rows) - top for r in rendered.values() for rows, _, top, _ in r.values() if rows])
