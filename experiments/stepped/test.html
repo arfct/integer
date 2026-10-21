@@ -1,8 +1,8 @@
-<!doctype html><meta charset="utf-8"><title>Stepped pixel font test</title>
+<!doctype html><meta charset="utf-8"><title>Integer stepped test</title>
 <style>
-@font-face { font-family: "Pixel Step"; src: url(out/PixelStep-VF.woff2); font-weight: 400 700; }
+@font-face { font-family: "Integer"; src: url(out/IntegerStep-VF.woff2); font-weight: 400 700; }
 body { margin: 16px; font: 12px system-ui; }
-.s { font-family: "Pixel Step"; font-optical-sizing: auto; line-height: 1; margin: 4px 0; white-space: pre; -webkit-font-smoothing: none; }
+.s { font-family: "Integer"; font-optical-sizing: auto; line-height: 1; margin: 4px 0; white-space: pre; -webkit-font-smoothing: none; }
 .tag { font: 11px system-ui; color: #080; margin-left: 12px; } .tag.b { color: #c00; }
 table { border-collapse: collapse; margin: 12px 0; } td, th { border: 1px solid #ccc; padding: 2px 8px; text-align: right; font-variant-numeric: tabular-nums; }
 </style>
@@ -39,7 +39,7 @@ function measure(size, weight) {
   c.style.webkitFontSmoothing = 'none'; document.body.append(c);   // same rendering as the DOM text
   const ctx = c.getContext('2d', { willReadFrequently: true }); ctx.scale(dpr, dpr);
   ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, 400, 40);
-  ctx.fillStyle = '#000'; ctx.font = `${weight} ${size}px "Pixel Step"`; ctx.fontKerning = 'none';
+  ctx.fillStyle = '#000'; ctx.font = `${weight} ${size}px "Integer"`; ctx.fontKerning = 'none';
   ctx.fillText(text, 2, 30);
   const d = ctx.getImageData(0, 0, c.width, c.height).data;
   let ink = 0, gray = 0;
@@ -47,7 +47,7 @@ function measure(size, weight) {
   c.remove();
   return { ink, gray };
 }
-document.fonts.load('16px "Pixel Step"').then(() => {
+document.fonts.load('16px "Integer"').then(() => {
   const t = document.getElementById('t');
   for (const [size, weight] of [[8, 400], [8, 700], [10, 400], [11, 400], [12, 400], [13, 400], [16, 400], [16, 500], [16, 549], [16, 550], [16, 700], [24, 400], [32, 700]]) {
     const { ink, gray } = measure(size, weight);

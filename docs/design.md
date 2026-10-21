@@ -1,4 +1,4 @@
-# A variable pixel font
+# Integer: a variable pixel font
 
 _Working design, October 2026. Two prototypes build: a continuous one (`scripts/build.py`) and a stepped one (`experiments/stepped/`). The stepped model is the direction; the character set, bold tuning, and the grid list are open._
 
@@ -155,6 +155,6 @@ All of the variable ones interpolate pixel shapes, which is the overlap effect. 
 
 ## Open decisions
 
-- **Name** and **license** (MIT per the org default, or OFL like every peer font).
+- **License** (MIT per the org default, or OFL like every peer font). The name is Integer: every value in the font is a whole number.
 - **Does `opsz` mean CSS pixels or device pixels** for the consumers we control. CSS pixels is the standard; device pixels is what crispness wants on 1.5× displays.
 - **Which grids** beyond 8, 12, and 16.

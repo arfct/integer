@@ -35,7 +35,7 @@ CAP, XHEIGHT = 9, 7
 VERSION = '0.1'
 
 args = argparse.ArgumentParser()
-args.add_argument('--family', default='Pixel Variable')
+args.add_argument('--family', default='Integer')
 args.add_argument('--primitive', choices=['pixels', 'runs'], default='pixels')
 args.add_argument('--out', default='build')
 args.add_argument('--glyphs', default='glyphs')
