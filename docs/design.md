@@ -1,6 +1,6 @@
 # Integer: a variable pixel font
 
-_Working design, October 2026. Two prototypes build: a continuous one (`scripts/build.py`) and a stepped one (`experiments/stepped/`). The stepped model is the direction; the character set, bold tuning, and the grid list are open._
+_Working design, October 2026. The font is named Integer. `scripts/build.py` builds the stepped model across seven grids and every exact size to 48, and `scripts/check.py` proves each instance is a bitmap through FreeType. The continuous prototype lives in `experiments/continuous/`. The character set, bold tuning, and hand correction of the derived grids are open._
 
 ## Thesis: a pixel font is a bundle of drawings, and a variable font is the modern bundle
 
@@ -148,8 +148,8 @@ All of the variable ones interpolate pixel shapes, which is the overlap effect. 
 
 ## Sequencing
 
-1. **Done:** two grids and two weights in one stepped file, verified pixel-exact in the DOM.
-2. **Make it the font:** fold the stepped build into `scripts/build.py` with per-grid source directories; `bold:` overrides; kerning, `tnum`, `zero`, `case`; the UI symbols; a name and a license; System Six switches to it.
+1. **Done:** grids 8, 9, 10, 11, 12, 14, 16 (the odd ones derived, not yet hand-corrected) and their multiples to 48, Regular and Bold, in one 65 KB file; every exact size verified bitmap-exact through FreeType, and the drawing selection verified in Chrome's DOM. The gvar tents are neighbour-bounded so no fixed-point drift reaches a master.
+2. **Make it the font:** hand-correct the derived grids where the rules fell short (accents on capitals at 12, descenders at 9); `bold:` overrides; kerning, `tnum`, `zero`, `case`; the UI symbols; a license; System Six switches to it.
 3. **Make it broad:** the 12-row grid; anchors and composition; Latin Plus, Greek, Cyrillic, box drawing; the mono.
 4. **Later:** 10- and 24-row grids from a skeleton rasterizer; `EBDT` strikes for Linux; the continuous decorative file.
 
