@@ -1,18 +1,20 @@
 # Integer Sans
 
-> **Prototype.** This is a test of a pipeline, not a finished typeface. The character set is Latin-1 only, the drawings are machine-rendered and largely uncorrected by hand, there is no kerning, and names, metrics, and the axis layout may change without notice. Do not ship it in anything you cannot update.
+> **Prototype.** This is a test of a pipeline, not a finished typeface. The character set is Latin-1 only, sizes below 9 are present but not readable, the drawings are machine-rendered and largely uncorrected by hand, there is no kerning, and names, metrics, and the axis layout may change without notice. Do not ship it in anything you cannot update.
 
-Integer Sans is a variable pixel font in which every value is a whole number: every rendered instance is a real bitmap. The size axis holds a drawing for every grid from 8 to 24 rows and the browser picks one from the font-size, never an interpolation; larger sizes that are a whole multiple of a grid (26 to 48) reuse its drawing at a whole scale. The weight axis steps between Light, Regular, and Bold, each a whole number of pixels of stem. The drawings are rendered from a source typeface by a reproducible pipeline and corrected by hand in override files.
+Integer Sans is a variable pixel font in which every value is a whole number: every rendered instance is a real bitmap. It ships as two families: **Integer Sans** holds a drawing for every size from 7 to 24 and **Integer Sans Display** one for every size from 25 to 48; the browser picks the drawing from the font-size, never an interpolation. The weight axis steps between Light, Regular, and Bold, each a whole number of pixels of stem. The drawings are rendered from a source typeface by a reproducible pipeline and corrected by hand in override files.
 
-Specimen: https://arfct.github.io/integer/ (built from `main` by the Pages workflow). The design, its reasoning, and the roadmap are in [docs/design.md](docs/design.md).
+Specimen: https://arfct.github.io/integer/ (built from `main` by the Pages workflow). The importer renders grids 7 to 48 in about eight minutes; the files are committed, so builds never need it. The design, its reasoning, and the roadmap are in [docs/design.md](docs/design.md).
 
 ## Build
 
 ```bash
 uv venv && uv pip install 'fonttools[woff]' pillow freetype-py
 .venv/bin/python scripts/import-inter.py   # renders glyphs/<grid>/<weight>.txt from the source typeface (about 20 s)
-.venv/bin/python scripts/build.py          # build/IntegerSans-VF.ttf and .woff2
-.venv/bin/python scripts/check.py          # unhinted FreeType render of every size: no gray, ink matches source, crossbars present (5 min)
+.venv/bin/python scripts/build.py          # build/IntegerSans-VF.ttf and .woff2, sizes 7 to 24
+.venv/bin/python scripts/build.py --family "Integer Sans Display" --min-size 25 --max-size 48 --default-size 32 --out build/display
+.venv/bin/python scripts/check.py          # unhinted FreeType render of every size: no gray, ink matches source, crossbars present
+.venv/bin/python scripts/check.py --font build/display/IntegerSansDisplay-VF.ttf --png build/display/proof.png
 ```
 
 The importer fixes each grid's rows for x-height, cap height, ascender, and descender from the source's proportions, picks for each weight the source instance whose stem is exactly the target number of pixels, warps the outlines so the metric lines land on those rows, lets FreeType's autohinter snap the stems, erodes curves and diagonals to pixel-perfect strokes of the stem's thickness (vertical) and the bar's (horizontal) using the grayscale coverage as a guide, and mirrors the letters the source draws symmetric so both sides take the same staircase. Hand fixes go in `glyphs/<grid>/<weight>.overrides.txt`, which the build applies on top and the importer never touches.
@@ -20,11 +22,13 @@ The importer fixes each grid's rows for x-height, cap height, ascender, and desc
 ## Use
 
 ```css
-@font-face { font-family: "Integer Sans"; src: url(IntegerSans-VF.woff2); font-weight: 400 700; }
-.pixel { font-family: "Integer Sans"; -webkit-font-smoothing: none; }
+@font-face { font-family: "Integer Sans"; src: url(IntegerSans-VF.woff2); font-weight: 200 800; }
+@font-face { font-family: "Integer Sans Display"; src: url(IntegerSansDisplay-VF.woff2); font-weight: 200 800; }
+.pixel { font-family: "Integer Sans"; -webkit-font-smoothing: none; }           /* 7px to 24px */
+.pixel-large { font-family: "Integer Sans Display"; -webkit-font-smoothing: none; }  /* 25px to 48px */
 ```
 
-Every whole font-size from 8 to 24 is exact at 1×, and so is every size from 26 to 48 that is a multiple of a grid; at 2× every whole size from 8 to 48 with a drawing is exact. Sizes with no drawing (25, 29, 31, 35, 37, 41, 43, 47) resample the nearest smaller one. Leave `font-optical-sizing` at its default (`auto`) so the size picks the drawing. `font-weight` 200, 400, and 700 or 800 give Light, Regular, and Bold; Light equals Regular below 23px, where both are one pixel.
+Every whole font-size from 7 to 48 is exact at 1× with the right family, and at 2× as well. Above 48, a size that is a whole multiple of a drawn size renders that drawing scaled. Leave `font-optical-sizing` at its default (`auto`) so the size picks the drawing. The text family is about 400 KB as woff2 and the display family about 1.7 MB, because every glyph in a file is padded to the rectangle count of its largest grid. `font-weight` 200, 400, and 700 or 800 give Light, Regular, and Bold; Light equals Regular below 23px, where both are one pixel.
 
 ## Preview
 
@@ -32,7 +36,7 @@ Serve the repo root (`python3 -m http.server`) and open `preview/`: every size f
 
 ## Sources
 
-`glyphs/<grid>/{light,regular,bold}.txt` are generated from the variable font in `vendor/` and committed so every build is reproducible. Each file names its grid, ascent, descent, cap height, and x-height in a header; each entry is a name, codepoint, an advance in pixels, an optional `left` offset, and a bitmap (`#` ink, `.` clear). `charset.txt` lists the codepoints to render.
+`glyphs/<grid>/{light,regular,bold}.txt`, one per grid from 7 to 48, are generated from the variable font in `vendor/` and committed so every build is reproducible. Each file names its grid, ascent, descent, cap height, and x-height in a header; each entry is a name, codepoint, an advance in pixels, an optional `left` offset, and a bitmap (`#` ink, `.` clear). `charset.txt` lists the codepoints to render.
 
 ## License
 

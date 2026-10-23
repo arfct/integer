@@ -9,6 +9,11 @@
     src: url(../build/IntegerSans-VF.woff2) format("woff2");
     font-weight: 200 800;
   }
+  @font-face {
+    font-family: "Integer Sans Display";
+    src: url(../build/display/IntegerSansDisplay-VF.woff2) format("woff2");
+    font-weight: 200 800;
+  }
   :root { color-scheme: light dark; --ink: #000; --paper: #fff; --mute: #777; --ok: #080; --no: #c00; }
   @media (prefers-color-scheme: dark) { :root { --ink: #fff; --paper: #000; --mute: #999; --ok: #4c4; --no: #f66; } }
   body { margin: 0; background: var(--paper); color: var(--ink); font: 13px/1.4 system-ui, sans-serif; }
@@ -36,7 +41,7 @@
 <main>
   <p class="note"><b>Prototype.</b> A test of a pipeline, not a finished typeface: Latin-1 only, machine-rendered drawings with few hand corrections, no kerning, and everything may change.</p>
   <div class="marker"></div>
-  <h2>Every size from 8 to 48</h2>
+  <h2>Every size from 7 to 48: Integer Sans to 24, Integer Sans Display from 25</h2>
   <div id="ladder"></div>
   <h2>A paragraph at 16: Light, Regular, Bold</h2>
   <p class="t" style="font-size:16px;line-height:19px"><span style="font-weight:200">The quick brown fox jumps over the lazy dog.</span>
@@ -52,10 +57,11 @@ Pack my box with five dozen liquor jugs. 0123456789
   const dpr = devicePixelRatio;
   el('dpr').textContent = `devicePixelRatio ${dpr}`;
   let sizes = null;
-  fetch('../build/sizes.json').then(r => r.json()).then(j => { sizes = j; render(); });
+  Promise.all([fetch('../build/sizes.json').then(r => r.json()), fetch('../build/display/sizes.json').then(r => r.json()).catch(() => ({ exact: {} }))])
+    .then(([t, d]) => { sizes = { exact: { ...t.exact, ...d.exact }, displayFrom: Math.min(...Object.keys(d.exact).map(Number), Infinity) }; render(); });
   function render() {
     const ladder = el('ladder'); ladder.innerHTML = '';
-    for (let s = 8; s <= 48; s++) {
+    for (let s = 7; s <= 48; s++) {
       const grid = sizes && sizes.exact[s];
       const row = document.createElement('div'); row.className = 'row';
       const meta = document.createElement('div'); meta.className = 'meta';
@@ -68,6 +74,7 @@ Pack my box with five dozen liquor jugs. 0123456789
       }
       const t = document.createElement('div'); t.className = 't' + (el('aa').checked ? ' aa' : '');
       t.style.fontSize = s + 'px'; t.style.fontWeight = el('wght').value;
+      if (sizes && s >= sizes.displayFrom) t.style.fontFamily = '"Integer Sans Display", system-ui';
       t.textContent = el('text').value;
       row.append(meta, t); ladder.append(row);
     }

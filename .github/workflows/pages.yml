@@ -22,17 +22,20 @@ jobs:
       - uses: astral-sh/setup-uv@v5
       - name: Install
         run: uv venv && uv pip install 'fonttools[woff]' pillow freetype-py
-      - name: Build the font
+      - name: Build Integer Sans (7 to 24)
         run: .venv/bin/python scripts/build.py
+      - name: Build Integer Sans Display (25 to 48)
+        run: .venv/bin/python scripts/build.py --family "Integer Sans Display" --min-size 25 --max-size 48 --default-size 32 --out build/display
       - name: Check every size renders as a bitmap
-        run: .venv/bin/python scripts/check.py
+        run: .venv/bin/python scripts/check.py && .venv/bin/python scripts/check.py --font build/display/IntegerSansDisplay-VF.ttf --png build/display/proof.png
       - name: Render the specimen sheet
         run: .venv/bin/python scripts/specimen.py
       - name: Assemble the site
         run: |
-          mkdir -p site/build
+          mkdir -p site/build/display
           sed 's#\.\./build/#build/#g' preview/index.html > site/index.html
           cp build/IntegerSans-VF.woff2 build/IntegerSans-VF.ttf build/sizes.json build/charset.txt site/build/
+          cp build/display/IntegerSansDisplay-VF.woff2 build/display/IntegerSansDisplay-VF.ttf build/display/sizes.json site/build/display/
           cp build/specimen.png build/specimen-3x.png build/proof.png site/build/
       - uses: actions/upload-pages-artifact@v3
         with:

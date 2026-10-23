@@ -1,12 +1,16 @@
 """Build Integer Sans: a variable pixel font in which every instance is a real bitmap.
 
-    python scripts/build.py [--out build] [--max-size 48]
+    python scripts/build.py [--family "Integer Sans"] [--min-size 7] [--max-size 24] [--default-size 16] [--out build]
+
+Two families ship: Integer Sans (7 to 24) and Integer Sans Display (25 to
+48, --default-size 32 --out build/display). Each file is padded only to its
+own largest grid, which keeps the text face small.
 
 Sources are glyphs/<grid>/<weight>.txt: one drawing per pixel grid (rows per
 em) and weight. The build turns every horizontal run of ink into a rectangle
 and packs all drawings into one variable font with two stepped axes:
 
-  opsz  Size, 8 to --max-size. Each exact size (a grid times a whole number)
+  opsz  Size, --min-size to --max-size. Each exact size (a grid times a whole number)
         is a master; avar maps are so steep that a font-size snaps to the
         nearest exact size at or below it, so `font-optical-sizing: auto`
         picks the right drawing by itself. Sizes that are a multiple of a
@@ -33,7 +37,6 @@ from fontTools.otlLib.builder import buildStatTable
 from fontTools.pens.ttGlyphPen import TTGlyphPen
 from fontTools.ttLib import newTable
 
-FAMILY = 'Integer Sans'
 VERSION = '0.2'
 NOTICE = 'Prototype: a pipeline test, not a finished typeface. Latin-1 only, machine-rendered, no kerning; may change.'
 UPM = 5040                      # divisible by 8, 9, 10, 12, 14, 16; 11 rounds by 0.04%
@@ -43,10 +46,14 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 GLYPHS = os.path.join(HERE, '..', 'glyphs')
 
 args = argparse.ArgumentParser()
+args.add_argument('--family', default='Integer Sans')
 args.add_argument('--out', default=os.path.join(HERE, '..', 'build'))
-args.add_argument('--max-size', type=int, default=48)
-args.add_argument('--min-size', type=int, default=8)
+args.add_argument('--min-size', type=int, default=7)
+args.add_argument('--max-size', type=int, default=24)
+args.add_argument('--default-size', type=int, default=16, help='the default master; must be an exact size in range')
 opt = args.parse_args()
+FAMILY = opt.family
+DEFAULT = opt.default_size
 os.makedirs(opt.out, exist_ok=True)
 
 
@@ -99,13 +106,14 @@ def runs(rows, ascent):
 # Load every grid.
 grids = {}
 for d in sorted(os.listdir(GLYPHS), key=lambda s: int(s) if s.isdigit() else 0):
-    if not d.isdigit():
+    if not d.isdigit() or not (1 <= int(d) <= opt.max_size):
         continue
     grids[int(d)] = {}
     for key, *_ in WEIGHTS:
         grids[int(d)][key] = load(os.path.join(GLYPHS, d, key + '.txt'))
-names = [n for n in grids[16]['regular'][4] if n != '.notdef']
-cmap = {cp: n for n in names for cp in grids[16]['regular'][4][n]['unicode']}
+ref = max(g for g in grids if g <= DEFAULT) if any(g <= DEFAULT for g in grids) else min(grids)
+names = [n for n in grids[ref]['regular'][4] if n != '.notdef']
+cmap = {cp: n for n in names for cp in grids[ref]['regular'][4][n]['unicode']}
 
 # Which sizes are exact, and which grid serves each (the finest one).
 served = {}
@@ -115,7 +123,7 @@ for size in range(opt.min_size, opt.max_size + 1):
             served[size] = grid
             break
 sizes = sorted(served)
-assert 16 in served, 'the 16-row grid is the default'
+assert DEFAULT in served, f'the default size {DEFAULT} must be an exact size in range'
 
 # Rectangle count per glyph across every grid, for padding.
 count = {n: max(len(runs(m[4][n]['rows'], m[0])) for grid in grids for m in grids[grid].values()) for n in names}
@@ -178,7 +186,7 @@ for i, s in enumerate(sizes):
     size_map.append((s, i))
     if i + 1 < len(sizes):
         size_map.append((sizes[i + 1] - 0.01, i))
-ds.addAxis(AxisDescriptor(tag='opsz', name='Size', minimum=sizes[0], default=16, maximum=sizes[-1],
+ds.addAxis(AxisDescriptor(tag='opsz', name='Size', minimum=sizes[0], default=DEFAULT, maximum=sizes[-1],
                           map=size_map))
 ds.addAxis(AxisDescriptor(tag='wght', name='Weight', minimum=200, default=400, maximum=800,
                           map=[(200, 0), (299.99, 0), (300, 1), (400, 1), (599.99, 1), (600, 2), (800, 2)]))
@@ -192,7 +200,7 @@ for s in sizes:
                                       familyName=FAMILY, styleName=style))
 for key, style, _, w in WEIGHTS:
     ds.addInstance(InstanceDescriptor(familyName=FAMILY, styleName=style,
-                                      location={'Size': sizes.index(16), 'Weight': w}))
+                                      location={'Size': sizes.index(DEFAULT), 'Weight': w}))
 
 
 
@@ -229,7 +237,7 @@ models.VariationModel._computeMasterSupports = _exact_supports
 vf, _, _ = varLib.build(ds)
 buildStatTable(vf, [
     {'tag': 'opsz', 'name': 'Size', 'values': [
-        {'value': s, 'name': f'{s}', **({'flags': 0x2} if s == 16 else {})} for s in sizes]},
+        {'value': s, 'name': f'{s}', **({'flags': 0x2} if s == DEFAULT else {})} for s in sizes]},
     {'tag': 'wght', 'name': 'Weight', 'values': [
         {'value': 200, 'name': 'Light'},
         {'value': 400, 'name': 'Regular', 'flags': 0x2, 'linkedValue': 800},
