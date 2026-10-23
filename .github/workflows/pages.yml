@@ -1,0 +1,49 @@
+name: Build and publish the specimen
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Install
+        run: uv venv && uv pip install 'fonttools[woff]' pillow freetype-py
+      - name: Build the font
+        run: .venv/bin/python scripts/build.py
+      - name: Check every size renders as a bitmap
+        run: .venv/bin/python scripts/check.py
+      - name: Render the specimen sheet
+        run: .venv/bin/python scripts/specimen.py
+      - name: Assemble the site
+        run: |
+          mkdir -p site/build
+          sed 's#\.\./build/#build/#g' preview/index.html > site/index.html
+          cp build/IntegerSans-VF.woff2 build/IntegerSans-VF.ttf build/sizes.json build/charset.txt site/build/
+          cp build/specimen.png build/specimen-3x.png build/proof.png site/build/
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

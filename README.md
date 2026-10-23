@@ -2,7 +2,7 @@
 
 Integer Sans is Inter on a pixel grid, in which every value is a whole number: every rendered instance is a real bitmap. The size axis holds a drawing for every grid from 8 to 24 rows and the browser picks one from the font-size, never an interpolation; larger sizes that are a whole multiple of a grid (26 to 48) reuse its drawing at a whole scale. The weight axis steps between Light, Regular, and Bold, each a whole number of pixels of stem. The drawings are rendered from Inter 4.1 by a reproducible pipeline and corrected by hand in override files.
 
-The design, its reasoning, and the roadmap are in [docs/design.md](docs/design.md).
+Specimen: https://arfct.github.io/integer/ (built from `main` by the Pages workflow). The design, its reasoning, and the roadmap are in [docs/design.md](docs/design.md).
 
 ## Build
 
