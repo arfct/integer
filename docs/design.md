@@ -20,7 +20,7 @@ System Six is the first consumer. It draws its components at one art pixel per w
 
 Every glyph is a text bitmap. The build turns ink into rectangles and emits one TrueType contour per rectangle. Drawings on different grids have different rectangle counts, so the build pads every glyph to the largest count with zero-size rectangles; that makes any two drawings "compatible" in the variable-font sense, even though interpolating between them would be nonsense.
 
-The nonsense is never shown. Each axis carries an `avar` map so steep that the interpolation band is a thousandth of the axis wide:
+The nonsense is never shown. Each axis carries an `avar` map whose ramps are narrow and sit *between* sizes, from size−0.5 to size−0.4, so every exact size rests on a flat plateau. That placement matters: the font's fixed-point coordinates cannot represent most master positions exactly, and a ramp that ended at the size itself let a rounding error of one part in sixteen thousand mix a percent of the neighbouring drawing into `11` and `13`.
 
 | Axis | User range | Renders | Switch |
 |---|---|---|---|

@@ -15,20 +15,28 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 FLAGS = freetype.FT_LOAD_RENDER | freetype.FT_LOAD_NO_HINTING | freetype.FT_LOAD_TARGET_NORMAL
 args = argparse.ArgumentParser()
 args.add_argument('--font', default=os.path.join(HERE, '..', 'build', 'IntegerSans-VF.ttf'))
-args.add_argument('--sizes', default='9,10,11,12,13,14,16,18,20,24,32,48')
+args.add_argument('--display-font', default=os.path.join(HERE, '..', 'build', 'display', 'IntegerSansDisplay-VF.ttf'))
+args.add_argument('--sizes', default='9,10,11,12,13,14,16,18,20,24,28,32,40,48')
 args.add_argument('--text', default='The quick brown fox jumps over the lazy dog 0123456789 @&% Åéîõü')
 args.add_argument('--out', default=os.path.join(HERE, '..', 'build', 'specimen.png'))
 opt = args.parse_args()
 
 info = json.load(open(os.path.join(os.path.dirname(opt.font), 'sizes.json')))
+display = None
+if os.path.exists(opt.display_font):
+    dinfo = json.load(open(os.path.join(os.path.dirname(opt.display_font), 'sizes.json')))
+    info['exact'].update(dinfo['exact'])
+    display = (freetype.Face(opt.display_font), min(int(k) for k in dinfo['exact']))
 sizes = [int(s) for s in opt.sizes.split(',')]
 weights = [(200, 'Light'), (400, 'Regular'), (800, 'Bold')]
-face = freetype.Face(opt.font)
+text_face = freetype.Face(opt.font)
+face = text_face
 label_font = ImageFont.load_default(size=11)
 LABEL_W, PAD = 150, 6
 
 
 def draw_text(im, x0, y_base, text):
+    global face
     px = im.load()
     x = float(x0)
     for ch in text:
@@ -57,6 +65,7 @@ y = PAD
 for size, w, name in rows:
     exact = str(size) in info['exact']
     grid = info['exact'].get(str(size))
+    face = display[0] if display and size >= display[1] else text_face
     face.set_var_design_coords((float(size), float(w)))
     face.set_pixel_sizes(0, size)
     line = int(size * 1.5)
