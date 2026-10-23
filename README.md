@@ -1,5 +1,7 @@
 # Integer Sans
 
+> **Prototype.** This is a test of a pipeline, not a finished typeface. The character set is Latin-1 only, the drawings are machine-rendered and largely uncorrected by hand, there is no kerning, and names, metrics, and the axis layout may change without notice. Do not ship it in anything you cannot update.
+
 Integer Sans is a variable pixel font in which every value is a whole number: every rendered instance is a real bitmap. The size axis holds a drawing for every grid from 8 to 24 rows and the browser picks one from the font-size, never an interpolation; larger sizes that are a whole multiple of a grid (26 to 48) reuse its drawing at a whole scale. The weight axis steps between Light, Regular, and Bold, each a whole number of pixels of stem. The drawings are rendered from a source typeface by a reproducible pipeline and corrected by hand in override files.
 
 Specimen: https://arfct.github.io/integer/ (built from `main` by the Pages workflow). The design, its reasoning, and the roadmap are in [docs/design.md](docs/design.md).

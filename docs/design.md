@@ -1,6 +1,6 @@
 # Integer Sans: a variable pixel font
 
-_Working design, October 2026. The font is named Integer Sans and its drawings are rendered from the source typeface by `scripts/import-inter.py` (grids 8 to 24, three weights); `scripts/build.py` packs every exact size to 48 into one stepped file and `scripts/check.py` proves each instance is a bitmap through FreeType. Hand correction of the rendered glyphs, the character set, and kerning are open._
+_Working design, October 2026. **The font is a prototype**: a pipeline test with a Latin-1 set, machine-rendered drawings, and no kerning; anything may change. The font is named Integer Sans and its drawings are rendered from the source typeface by `scripts/import-inter.py` (grids 8 to 24, three weights); `scripts/build.py` packs every exact size to 48 into one stepped file and `scripts/check.py` proves each instance is a bitmap through FreeType. Hand correction of the rendered glyphs, the character set, and kerning are open._
 
 ## Thesis: a pixel font is a bundle of drawings, and a variable font is the modern bundle
 

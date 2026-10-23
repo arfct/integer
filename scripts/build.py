@@ -35,6 +35,7 @@ from fontTools.ttLib import newTable
 
 FAMILY = 'Integer Sans'
 VERSION = '0.2'
+NOTICE = 'Prototype: a pipeline test, not a finished typeface. Latin-1 only, machine-rendered, no kerning; may change.'
 UPM = 5040                      # divisible by 8, 9, 10, 12, 14, 16; 11 rounds by 0.04%
 WEIGHTS = [('light', 'Light', 200, 0), ('regular', 'Regular', 400, 1), ('bold', 'Bold', 800, 2)]
 DEFAULT_WEIGHT = 1
@@ -154,7 +155,8 @@ def build_master(size, weight_key, style, path):
     fb.setupNameTable({
         'familyName': FAMILY, 'styleName': style,
         'uniqueFontIdentifier': f'{FAMILY} {style} {VERSION}', 'fullName': f'{FAMILY} {style}',
-        'psName': f'{FAMILY.replace(" ", "")}-{style.replace(" ", "")}', 'version': f'Version {VERSION}',
+        'psName': f'{FAMILY.replace(" ", "")}-{style.replace(" ", "")}', 'version': f'Version {VERSION} (prototype)',
+        'description': NOTICE,
         'copyright': 'Copyright 2026 Artifact. Derived from Inter, Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter).',
         'licenseDescription': 'This Font Software is licensed under the SIL Open Font License, Version 1.1. '
                               'This license is available with a FAQ at: https://openfontlicense.org',
