@@ -181,11 +181,15 @@ def build_master(size, weight_key, style, path):
 
 
 ds = DesignSpaceDocument()
+# Each exact size sits on a plateau of the avar map, with the ramp to the next
+# size between next-0.5 and next-0.4, so fixed-point rounding of the size
+# itself never lands inside a ramp and mixes two drawings.
 size_map = []
 for i, s in enumerate(sizes):
     size_map.append((s, i))
     if i + 1 < len(sizes):
-        size_map.append((sizes[i + 1] - 0.01, i))
+        size_map.append((sizes[i + 1] - 0.5, i))
+        size_map.append((sizes[i + 1] - 0.4, i + 1))
 ds.addAxis(AxisDescriptor(tag='opsz', name='Size', minimum=sizes[0], default=DEFAULT, maximum=sizes[-1],
                           map=size_map))
 ds.addAxis(AxisDescriptor(tag='wght', name='Weight', minimum=200, default=400, maximum=800,
