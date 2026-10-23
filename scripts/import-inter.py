@@ -242,7 +242,7 @@ def thin(rows, cover, k=1, h=1, limit=0.95, orbit=None):
                 yy, xx = yy + sgn * dy, xx + sgn * dx
         return n
 
-    def removable(y, x):
+    def removable(y, x, group=((),)):
         ns = neighbours(y, x)
         if len(ns) < 2:
             return False                      # a stroke end
@@ -250,7 +250,10 @@ def thin(rows, cover, k=1, h=1, limit=0.95, orbit=None):
             return False                      # interior: removal would open a hole
         rh, rv = run(y, x, 0, 1), run(y, x, 1, 0)
         steep = rv >= rh                      # locally vertical-ish: thickness is the horizontal run
-        if not (rh > k if steep else rv > h):
+        # Other pixels removed in the same symmetric group and lying in this run count too.
+        same_row = sum(1 for py, px in group if py == y and px != x and abs(px - x) < rh)
+        same_col = sum(1 for py, px in group if px == x and py != y and abs(py - y) < rv)
+        if not (rh - same_row > k if steep else rv - same_col > h):
             return False                      # not surplus to the thickness
         groups = []
         for n in ns:
@@ -271,7 +274,7 @@ def thin(rows, cover, k=1, h=1, limit=0.95, orbit=None):
             if not ink[y][x]:
                 continue
             o = orbit(y, x) if orbit else [(y, x)]
-            if all(ink[py][px] and removable(py, px) for py, px in o):
+            if all(ink[py][px] and removable(py, px, o) for py, px in o):
                 for py, px in o:                      # a symmetric glyph loses whole orbits
                     ink[py][px] = False
                 changed = True
@@ -315,6 +318,22 @@ def full_width_bar(ink, y, x, my, x0, x1):
     return a <= x0 and b >= x1
 
 
+def tall_stem(ink, y, x, mx):
+    """True when the ink pixel of the pair sits in a vertical run of 3+ rows
+    whose mirror column is clear alongside it: a stem like T's on an odd
+    width, not a crossing or an apex, which are short."""
+    col = x if ink[y][x] else mx
+    other = mx if ink[y][x] else x
+    a = b = y
+    while a > 0 and ink[a - 1][col]:
+        a -= 1
+    while b + 1 < len(ink) and ink[b + 1][col]:
+        b += 1
+    if b - a + 1 < 3:
+        return False
+    return sum(1 for r in range(a, b + 1) if ink[r][other]) <= (b - a + 1) // 3
+
+
 def _mirror_pass(rows, cover, orig, lr, tb):
     """One axis of mirror symmetry about the ink bounding box; see symmetrize."""
     ink = [[c == '#' for c in r] for r in rows]
@@ -337,6 +356,8 @@ def _mirror_pass(rows, cover, orig, lr, tb):
             solid = max(orig[y][x], orig[my][mx]) >= 0.9
             if tb and solid and full_width_bar(ink, y, x, my, x0, x1):
                 continue                              # a bar facing an empty row: it cannot be centred on an even cap
+            if lr and solid and tall_stem(ink, y, x, mx):
+                continue                              # a stem facing an empty column: it cannot be centred on an odd width
             if c >= 0.6:
                 state = True
             elif c <= 0.4:
