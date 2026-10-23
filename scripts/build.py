@@ -159,7 +159,7 @@ def build_master(size, weight_key, style, path):
         'licenseDescription': 'This Font Software is licensed under the SIL Open Font License, Version 1.1. '
                               'This license is available with a FAQ at: https://openfontlicense.org',
         'licenseInfoURL': 'https://openfontlicense.org',
-        'manufacturer': 'Artifact', 'designer': 'Rasmus Andersson (Inter); Artifact (Integer Sans)',
+        'manufacturer': 'Artifact', 'designer': 'Artifact',
     })
     wclass = next(w for k, _, w, _ in WEIGHTS if k == weight_key)
     fb.setupOS2(version=4, sTypoAscender=asc, sTypoDescender=-desc, sTypoLineGap=0,

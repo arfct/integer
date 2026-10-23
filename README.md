@@ -1,6 +1,6 @@
 # Integer Sans
 
-Integer Sans is Inter on a pixel grid, in which every value is a whole number: every rendered instance is a real bitmap. The size axis holds a drawing for every grid from 8 to 24 rows and the browser picks one from the font-size, never an interpolation; larger sizes that are a whole multiple of a grid (26 to 48) reuse its drawing at a whole scale. The weight axis steps between Light, Regular, and Bold, each a whole number of pixels of stem. The drawings are rendered from Inter 4.1 by a reproducible pipeline and corrected by hand in override files.
+Integer Sans is a variable pixel font in which every value is a whole number: every rendered instance is a real bitmap. The size axis holds a drawing for every grid from 8 to 24 rows and the browser picks one from the font-size, never an interpolation; larger sizes that are a whole multiple of a grid (26 to 48) reuse its drawing at a whole scale. The weight axis steps between Light, Regular, and Bold, each a whole number of pixels of stem. The drawings are rendered from a source typeface by a reproducible pipeline and corrected by hand in override files.
 
 Specimen: https://arfct.github.io/integer/ (built from `main` by the Pages workflow). The design, its reasoning, and the roadmap are in [docs/design.md](docs/design.md).
 
@@ -8,12 +8,12 @@ Specimen: https://arfct.github.io/integer/ (built from `main` by the Pages workf
 
 ```bash
 uv venv && uv pip install 'fonttools[woff]' pillow freetype-py
-.venv/bin/python scripts/import-inter.py   # renders glyphs/<grid>/<weight>.txt from vendor/inter (about 20 s)
+.venv/bin/python scripts/import-inter.py   # renders glyphs/<grid>/<weight>.txt from the source typeface (about 20 s)
 .venv/bin/python scripts/build.py          # build/IntegerSans-VF.ttf and .woff2
 .venv/bin/python scripts/check.py          # unhinted FreeType render of every size: no gray, ink matches source, crossbars present (5 min)
 ```
 
-The importer fixes each grid's rows for x-height, cap height, ascender, and descender from Inter's proportions, picks for each weight the Inter weight whose stem is exactly the target number of pixels, warps the outlines so the metric lines land on those rows, lets FreeType's autohinter snap the stems, erodes curves and diagonals to pixel-perfect strokes of the stem's thickness (vertical) and the bar's (horizontal) using the grayscale coverage as a guide, and mirrors the letters Inter draws symmetric so both sides take the same staircase. Hand fixes go in `glyphs/<grid>/<weight>.overrides.txt`, which the build applies on top and the importer never touches.
+The importer fixes each grid's rows for x-height, cap height, ascender, and descender from the source's proportions, picks for each weight the source instance whose stem is exactly the target number of pixels, warps the outlines so the metric lines land on those rows, lets FreeType's autohinter snap the stems, erodes curves and diagonals to pixel-perfect strokes of the stem's thickness (vertical) and the bar's (horizontal) using the grayscale coverage as a guide, and mirrors the letters the source draws symmetric so both sides take the same staircase. Hand fixes go in `glyphs/<grid>/<weight>.overrides.txt`, which the build applies on top and the importer never touches.
 
 ## Use
 
@@ -30,8 +30,8 @@ Serve the repo root (`python3 -m http.server`) and open `preview/`: every size f
 
 ## Sources
 
-`glyphs/<grid>/{light,regular,bold}.txt` are generated from `vendor/inter/InterVariable.ttf` (Inter 4.1, SIL Open Font License 1.1) and committed so every build is reproducible. Each file names its grid, ascent, descent, cap height, and x-height in a header; each entry is a name, codepoint, an advance in pixels, an optional `left` offset, and a bitmap (`#` ink, `.` clear). `charset.txt` lists the codepoints to render.
+`glyphs/<grid>/{light,regular,bold}.txt` are generated from the variable font in `vendor/` and committed so every build is reproducible. Each file names its grid, ascent, descent, cap height, and x-height in a header; each entry is a name, codepoint, an advance in pixels, an optional `left` offset, and a bitmap (`#` ink, `.` clear). `charset.txt` lists the codepoints to render.
 
 ## License
 
-The font is a derivative of Inter and is licensed under the SIL Open Font License 1.1 ([vendor/inter/LICENSE.txt](vendor/inter/LICENSE.txt)); the scripts and everything else in the repo are MIT ([LICENSE](LICENSE)).
+The font is licensed under the SIL Open Font License 1.1; its copyright notices are in [vendor/inter/LICENSE.txt](vendor/inter/LICENSE.txt). The scripts and everything else in the repo are MIT ([LICENSE](LICENSE)).
