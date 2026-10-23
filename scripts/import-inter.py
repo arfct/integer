@@ -214,7 +214,7 @@ def bitmap_rows(bm):
     return [[bm.buffer[r * bm.pitch + c] for c in range(bm.width)] for r in range(bm.rows)]
 
 
-def thin(rows, cover, k=1, h=1, limit=0.95):
+def thin(rows, cover, k=1, h=1, limit=0.95, orbit=None):
     """Pixel-perfect strokes k pixels wide vertically and h horizontally.
 
     Drops partially covered ink pixels, least covered first, while the stroke
@@ -268,8 +268,12 @@ def thin(rows, cover, k=1, h=1, limit=0.95):
         cands = sorted(((cover[y][x], y, x) for y in range(hgt) for x in range(wid)
                         if ink[y][x] and cover[y][x] < limit), key=lambda t: t[0])
         for c, y, x in cands:
-            if ink[y][x] and removable(y, x):
-                ink[y][x] = False
+            if not ink[y][x]:
+                continue
+            o = orbit(y, x) if orbit else [(y, x)]
+            if all(ink[py][px] and removable(py, px) for py, px in o):
+                for py, px in o:                      # a symmetric glyph loses whole orbits
+                    ink[py][px] = False
                 changed = True
     return [''.join('#' if v else '.' for v in r) for r in ink]
 
@@ -280,6 +284,127 @@ def bitmap_rows_of_H(path, grid):
     face.load_char('H', freetype.FT_LOAD_TARGET_MONO | freetype.FT_LOAD_FORCE_AUTOHINT)
     face.glyph.render(freetype.FT_RENDER_MODE_MONO)
     return bitmap_rows(face.glyph.bitmap)
+
+
+# Glyphs that Inter draws mirror-symmetric. Left-right mirrors about the ink's
+# centre column; top-bottom about its centre row. Rotational symmetry (S, Z, N)
+# is not enforced: those shapes differ top and bottom by design.
+SYM_LR = set('A H I M O T U V W X Y i l o v w x 0 8 ! " * + - . : = ^ _ | ~'.split()) | {
+    'Adieresis', 'Acircumflex', 'Aring', 'Odieresis', 'Ocircumflex', 'Udieresis', 'Ucircumflex', 'Idieresis', 'Icircumflex',
+    'adieresis', 'acircumflex', 'aring', 'odieresis', 'ocircumflex', 'udieresis', 'ucircumflex', 'idieresis', 'icircumflex',
+    'exclam', 'quotedbl', 'asterisk', 'plus', 'hyphen', 'period', 'colon', 'equal', 'asciicircum', 'underscore', 'bar',
+    'asciitilde', 'exclamdown', 'dieresis', 'degree', 'periodcentered', 'brokenbar', 'macron', 'multiply', 'bullet',
+    'ellipsis', 'quotedblbase', 'quotedblleft', 'quotedblright', 'uni2423', 'zero', 'eight', 'AE', 'ae', 'logicalnot'} - {'AE', 'ae', 'logicalnot', 'quotedblbase', 'quotedblleft', 'quotedblright', 'macron'}
+SYM_TB = {'H', 'I', 'O', 'X', 'o', 'x', 'zero', 'hyphen', 'equal', 'plus', 'bar', 'brokenbar', 'parenleft', 'parenright',
+          'bracketleft', 'bracketright', 'braceleft', 'braceright', 'less', 'greater', 'periodcentered', 'multiply', 'bullet',
+          'colon', 'asterisk', 'degree', 'ordmasculine'} - {'asterisk', 'degree', 'ordmasculine'}
+
+
+def full_width_bar(ink, y, x, my, x0, x1):
+    """True when the horizontal run through (y, x), or through its mirror if
+    (y, x) is clear, spans the whole ink width: a bar between two stems, as in
+    H, which cannot be centred on an even cap. A curve's top never does."""
+    row = ink[y] if ink[y][x] else ink[my]
+    if not row[x]:
+        return False
+    a = b = x
+    while a > 0 and row[a - 1]:
+        a -= 1
+    while b + 1 < len(row) and row[b + 1]:
+        b += 1
+    return a <= x0 and b >= x1
+
+
+def _mirror_pass(rows, cover, orig, lr, tb):
+    """One axis of mirror symmetry about the ink bounding box; see symmetrize."""
+    ink = [[c == '#' for c in r] for r in rows]
+    h, w = len(ink), len(ink[0]) if ink else 0
+    ys = [y for y in range(h) if any(ink[y])]
+    xs = [x for x in range(w) if any(ink[y][x] for y in range(h))]
+    if not ys:
+        return rows, cover
+    x0, x1, y0, y1 = xs[0], xs[-1], ys[0], ys[-1]
+    cov = [list(r) for r in cover]
+    for y in range(y0, y1 + 1):
+        for x in range(x0, x1 + 1):
+            my, mx = (y0 + y1 - y if tb else y), (x0 + x1 - x if lr else x)
+            if (my, mx) <= (y, x):
+                continue
+            c = (cov[y][x] + cov[my][mx]) / 2
+            cov[y][x] = cov[my][mx] = c
+            if ink[y][x] == ink[my][mx]:
+                continue
+            solid = max(orig[y][x], orig[my][mx]) >= 0.9
+            if tb and solid and full_width_bar(ink, y, x, my, x0, x1):
+                continue                              # a bar facing an empty row: it cannot be centred on an even cap
+            if c >= 0.6:
+                state = True
+            elif c <= 0.4:
+                state = False
+            elif solid:
+                state = True                          # a crossing or apex on an even width: fill it out
+            else:
+                state = ink[y][x]                     # the left (or top) pixel wins, consistently
+            ink[y][x] = ink[my][mx] = state
+    return [''.join('#' if v else '.' for v in r) for r in ink], cov
+
+
+def symmetrize(rows, cover, lr, tb, orig=None):
+    """Make a bitmap mirror-symmetric about its ink bounding box.
+
+    Left-right first, then top-bottom, each as a pass over mirrored pixel
+    pairs. A disagreeing pair is set from its mean coverage: ink above 0.6,
+    clear below 0.4; in between, a solid pixel (original coverage 0.9+) is a
+    snapped feature: on the top-bottom axis a bar that cannot be centred on an
+    even cap is left alone, on the left-right axis a crossing or apex on an
+    even width is filled out; otherwise the left (or top) pixel's state wins
+    so the choice is consistent along a staircase. Coverage is averaged over
+    each pair too, so a thinning pass afterwards treats both sides alike.
+    Returns (rows, coverage, orbit) where orbit(y, x) lists a pixel's images
+    under both flips, for thinning in symmetric groups."""
+    orig = orig or cover
+    if lr:
+        # The solidity test must not see left and right differently, or the
+        # top-bottom pass decides the two sides of a row inconsistently.
+        ink0 = [[c == '#' for c in r] for r in rows]
+        xs = [x for x in range(len(ink0[0]) if ink0 else 0) if any(row[x] for row in ink0)]
+        if xs:
+            x0, x1 = xs[0], xs[-1]
+            orig = [[max(r[x], r[x0 + x1 - x]) if x0 <= x <= x1 else r[x] for x in range(len(r))] for r in orig]
+        rows, cover = _mirror_pass(rows, cover, orig, True, False)
+    if tb:
+        rows, cover = _mirror_pass(rows, cover, orig, False, True)
+    ink = [[c == '#' for c in r] for r in rows]
+    h, w = len(ink), len(ink[0]) if ink else 0
+    ys = [y for y in range(h) if any(ink[y])]
+    xs = [x for x in range(w) if any(ink[y][x] for y in range(h))]
+    if not ys:
+        return rows, cover, (lambda y, x: [(y, x)])
+    x0, x1, y0, y1 = xs[0], xs[-1], ys[0], ys[-1]
+
+    def orbit(y, x):
+        pts = {(y, x)}
+        if lr:
+            pts |= {(py, x0 + x1 - px) for py, px in pts}
+        if tb:
+            pts |= {(y0 + y1 - py, px) for py, px in pts}
+        return sorted(pts)
+
+    return rows, cover, orbit
+
+
+def center_in_advance(rows, left, adv):
+    """Equal side bearings for a symmetric glyph when the spare width is even."""
+    if not rows:
+        return left
+    xs = [x for x in range(len(rows[0])) if any(r[x] == '#' for r in rows)]
+    if not xs:
+        return left
+    width = xs[-1] - xs[0] + 1
+    spare = adv - width
+    if spare >= 0 and spare % 2 == 0:
+        return spare // 2 - xs[0]
+    return left
 
 
 def bar_thickness(rows_H):
@@ -317,7 +442,18 @@ def render_font(path, grid, smear, stem):
                     yy, xx = y + (top - gt), x + (gl - left)
                     if 0 <= yy < len(rows) and 0 <= xx < len(rows[0]):
                         cover[yy][xx] = v / 255.0
-            rows = thin(rows, cover, k=stem, h=bar)
+            name = names.get(cp, '')
+            lr, tb = name in SYM_LR, name in SYM_TB
+            if lr or tb:
+                orig = cover
+                rows, cover, orbit = symmetrize(rows, cover, lr, tb, orig)
+                rows = thin(rows, cover, k=stem, h=bar, orbit=orbit)
+                rows, cover, orbit = symmetrize(rows, cover, lr, tb, orig)
+                rows = thin(rows, cover, k=stem, h=bar, orbit=orbit)
+            else:
+                rows = thin(rows, cover, k=stem, h=bar)
+            if lr:
+                left = center_in_advance(rows, left, adv)
         if smear and rows:
             rows = [''.join('#' if any(line[i - k] == '#' for k in range(0, smear + 1) if 0 <= i - k < len(line)) else '.'
                             for i in range(len(line) + smear)) for line in rows]

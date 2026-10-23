@@ -13,7 +13,7 @@ uv venv && uv pip install 'fonttools[woff]' pillow freetype-py
 .venv/bin/python scripts/check.py          # unhinted FreeType render of every size: no gray, ink matches source, crossbars present (5 min)
 ```
 
-The importer fixes each grid's rows for x-height, cap height, ascender, and descender from Inter's proportions, picks for each weight the Inter weight whose stem is exactly the target number of pixels, warps the outlines so the metric lines land on those rows, lets FreeType's autohinter snap the stems, and erodes curves and diagonals to pixel-perfect strokes of the stem's thickness (vertical) and the bar's (horizontal), using the grayscale coverage as a guide. Hand fixes go in `glyphs/<grid>/<weight>.overrides.txt`, which the build applies on top and the importer never touches.
+The importer fixes each grid's rows for x-height, cap height, ascender, and descender from Inter's proportions, picks for each weight the Inter weight whose stem is exactly the target number of pixels, warps the outlines so the metric lines land on those rows, lets FreeType's autohinter snap the stems, erodes curves and diagonals to pixel-perfect strokes of the stem's thickness (vertical) and the bar's (horizontal) using the grayscale coverage as a guide, and mirrors the letters Inter draws symmetric so both sides take the same staircase. Hand fixes go in `glyphs/<grid>/<weight>.overrides.txt`, which the build applies on top and the importer never touches.
 
 ## Use
 
