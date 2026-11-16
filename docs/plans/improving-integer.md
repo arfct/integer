@@ -1,5 +1,7 @@
 # Improving Integer Sans: next steps
 
+_Amended by [hand-drawn-at-every-size.md](hand-drawn-at-every-size.md) (2026-11-15): large sizes are not solved, part sharing is a constraint the scorer cannot see, and sidebearings already agree per class._
+
 _Plan, 2026-10-23. Follows a short research pass on current rasterization and pixel-art practice; see References._
 
 ## Thesis: large sizes are solved, small sizes are a search problem, and search is now cheap
