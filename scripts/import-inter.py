@@ -21,12 +21,16 @@ When Inter cannot get heavy enough (small grids), the glyph is rendered at
 Inter Black and smeared right by the missing pixels, the classic bitmap bold.
 """
 import argparse
+import collections
 import ctypes
 import io
 import os
 import tempfile
+import time
+import unicodedata
 
 import freetype
+import numpy as np
 from fontTools import subset
 from fontTools.ttLib import TTFont
 from fontTools.ttLib.tables import ttProgram
@@ -38,10 +42,11 @@ INTER = os.path.join(HERE, '..', 'vendor', 'inter', 'InterVariable.ttf')
 UPM = 2048
 
 args = argparse.ArgumentParser()
-args.add_argument('--grids', default='8-24')
+args.add_argument('--grids', default='7-48')
 args.add_argument('--weights', default='light,regular,bold')
 args.add_argument('--charset', default=os.path.join(HERE, '..', 'charset.txt'))
 args.add_argument('--out', default=os.path.join(HERE, '..', 'glyphs'))
+args.add_argument('--no-derive', action='store_true', help='skip the derivation stage (shared parts, accents)')
 opt = args.parse_args()
 
 
@@ -183,6 +188,12 @@ def warp_y(y, pts):
 
 def warp_font(font, pts):
     glyf = font['glyf']
+    # Decompose every composite before warping anything. Warped in place, a
+    # composite whose component came earlier in glyph order was built from the
+    # already warped component and warped again: the accented letters, i, j,
+    # and the colon, which are composites in the source, landed a row off
+    # their base letter at some grids.
+    flat = {}
     for name in list(glyf.keys()):
         g = glyf[name]
         if g.isComposite():
@@ -193,7 +204,11 @@ def warp_font(font, pts):
             ng.endPtsOfContours = list(ends)
             ng.flags = bytearray(flags)
             ng.program = ttProgram.Program()
-            glyf[name] = g = ng
+            flat[name] = ng
+    for name, ng in flat.items():
+        glyf[name] = ng
+    for name in list(glyf.keys()):
+        g = glyf[name]
         if g.numberOfContours <= 0:
             continue
         g.coordinates = GlyphCoordinates([(x, round(warp_y(y, pts))) for x, y in g.coordinates])
@@ -214,6 +229,39 @@ def bitmap_rows(bm):
     return [[bm.buffer[r * bm.pitch + c] for c in range(bm.width)] for r in range(bm.rows)]
 
 
+def pieces(rows):
+    """8-connected groups of ink, for rows of '#'/'.' or of booleans, by
+    union-find over horizontal runs (fast enough for a 4x render)."""
+    parent = []
+
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    prev = []
+    for r in rows:
+        cur, x, n = [], 0, len(r)
+        while x < n:
+            if r[x] is True or r[x] == '#':
+                x0 = x
+                while x < n and (r[x] is True or r[x] == '#'):
+                    x += 1
+                i = len(parent)
+                parent.append(i)
+                cur.append((x0, x - 1, i))
+                for a, b, j in prev:              # touching, diagonals included
+                    if a <= x and b >= x0 - 1:
+                        ri, rj = find(i), find(j)
+                        if ri != rj:
+                            parent[ri] = rj
+            else:
+                x += 1
+        prev = cur
+    return len({find(i) for i in range(len(parent))})
+
+
 def thin(rows, cover, k=1, h=1, limit=0.95, orbit=None):
     """Pixel-perfect strokes k pixels wide vertically and h horizontally.
 
@@ -223,7 +271,9 @@ def thin(rows, cover, k=1, h=1, limit=0.95, orbit=None):
     steep stroke its horizontal run is longer than k, on a shallow one its
     vertical run is longer than h. Snapped stems
     and bars sit at full coverage and are never candidates, so they define the
-    thickness; curves and diagonals are eroded down to it."""
+    thickness; curves and diagonals are eroded down to it. With an orbit (a
+    mirrored glyph) pixels go in whole orbits, and an orbit stays when clearing
+    it would split the glyph."""
     hgt, wid = len(rows), len(rows[0]) if rows else 0
     ink = [[c == '#' for c in r] for r in rows]
 
@@ -265,6 +315,15 @@ def thin(rows, cover, k=1, h=1, limit=0.95, orbit=None):
                 groups = [grp for gi, grp in enumerate(groups) if gi not in joined] + [merged]
         return len(groups) == 1
 
+    def joined(y, x):
+        """Clearing (y, x) keeps its ink neighbours one group: no piece splits off."""
+        ns = neighbours(y, x)
+        groups = []
+        for n in ns:
+            hit = [gi for gi, grp in enumerate(groups) if any(abs(n[0] - m[0]) <= 1 and abs(n[1] - m[1]) <= 1 for m in grp)]
+            groups = [grp for gi, grp in enumerate(groups) if gi not in hit] + [[n] + [m for gi in hit for m in groups[gi]]]
+        return len(groups) == 1
+
     changed = True
     while changed:
         changed = False
@@ -275,8 +334,20 @@ def thin(rows, cover, k=1, h=1, limit=0.95, orbit=None):
                 continue
             o = orbit(y, x) if orbit else [(y, x)]
             if all(ink[py][px] and removable(py, px, o) for py, px in o):
-                for py, px in o:                      # a symmetric glyph loses whole orbits
+                # A symmetric glyph loses whole orbits. Each pixel passed the
+                # test alone; clear them one at a time and re-test the rest, so
+                # an apex two pixels wide cannot go in one move and split the
+                # glyph. The test is local (the 3x3 ring), so it costs nothing.
+                done = []
+                for py, px in o:
+                    if done and not joined(py, px):
+                        break
                     ink[py][px] = False
+                    done.append((py, px))
+                if len(done) < len(o):
+                    for py, px in done:
+                        ink[py][px] = True
+                    continue
                 changed = True
     return [''.join('#' if v else '.' for v in r) for r in ink]
 
@@ -292,12 +363,15 @@ def bitmap_rows_of_H(path, grid):
 # Glyphs that Inter draws mirror-symmetric. Left-right mirrors about the ink's
 # centre column; top-bottom about its centre row. Rotational symmetry (S, Z, N)
 # is not enforced: those shapes differ top and bottom by design.
-SYM_LR = set('A H I M O T U V W X Y i l o v w x 0 8 ! " * + - . : = ^ _ | ~'.split()) | {
+SYM_LR = set('A H I M O T U V W X Y i l o v w x 0 8 ! " * + - . : = ^ _ |'.split()) | {
     'Adieresis', 'Acircumflex', 'Aring', 'Odieresis', 'Ocircumflex', 'Udieresis', 'Ucircumflex', 'Idieresis', 'Icircumflex',
-    'adieresis', 'acircumflex', 'aring', 'odieresis', 'ocircumflex', 'udieresis', 'ucircumflex', 'idieresis', 'icircumflex',
+    'odieresis', 'ocircumflex', 'idieresis', 'icircumflex',
     'exclam', 'quotedbl', 'asterisk', 'plus', 'hyphen', 'period', 'colon', 'equal', 'asciicircum', 'underscore', 'bar',
-    'asciitilde', 'exclamdown', 'dieresis', 'degree', 'periodcentered', 'brokenbar', 'macron', 'multiply', 'bullet',
-    'ellipsis', 'quotedblbase', 'quotedblleft', 'quotedblright', 'uni2423', 'zero', 'eight', 'AE', 'ae', 'logicalnot'} - {'AE', 'ae', 'logicalnot', 'quotedblbase', 'quotedblleft', 'quotedblright', 'macron'}
+    'exclamdown', 'dieresis', 'degree', 'periodcentered', 'brokenbar', 'multiply', 'bullet',
+    'ellipsis', 'uni2423', 'zero', 'eight'}
+# Not on the list although they look symmetric at a glance: a and u under a
+# dieresis, circumflex or ring (the base letter is not symmetric, so mirroring
+# folded it onto itself), and the tilde (point-symmetric, not mirror-symmetric).
 SYM_TB = {'H', 'I', 'O', 'X', 'o', 'x', 'zero', 'hyphen', 'equal', 'plus', 'bar', 'brokenbar', 'parenleft', 'parenright',
           'bracketleft', 'bracketright', 'braceleft', 'braceright', 'less', 'greater', 'periodcentered', 'multiply', 'bullet',
           'colon', 'asterisk', 'degree', 'ordmasculine'} - {'asterisk', 'degree', 'ordmasculine'}
@@ -334,8 +408,10 @@ def tall_stem(ink, y, x, mx):
     return sum(1 for r in range(a, b + 1) if ink[r][other]) <= (b - a + 1) // 3
 
 
-def _mirror_pass(rows, cover, orig, lr, tb):
-    """One axis of mirror symmetry about the ink bounding box; see symmetrize."""
+def _mirror_pass(rows, cover, orig, lr, tb, union=False):
+    """One axis of mirror symmetry about the ink bounding box; see symmetrize.
+    With union, a disagreeing pair is always inked: the fallback when the
+    plain pass would leave the glyph in more pieces."""
     ink = [[c == '#' for c in r] for r in rows]
     h, w = len(ink), len(ink[0]) if ink else 0
     ys = [y for y in range(h) if any(ink[y])]
@@ -358,7 +434,7 @@ def _mirror_pass(rows, cover, orig, lr, tb):
                 continue                              # a bar facing an empty row: it cannot be centred on an even cap
             if lr and solid and tall_stem(ink, y, x, mx):
                 continue                              # a stem facing an empty column: it cannot be centred on an odd width
-            if c >= 0.6:
+            if union or c >= 0.6:
                 state = True
             elif c <= 0.4:
                 state = False
@@ -381,9 +457,24 @@ def symmetrize(rows, cover, lr, tb, orig=None):
     even width is filled out; otherwise the left (or top) pixel's state wins
     so the choice is consistent along a staircase. Coverage is averaged over
     each pair too, so a thinning pass afterwards treats both sides alike.
+    A pass that would change the number of pieces is redone as a union: a
+    thin diagonal whose two legs the hinter snapped differently loses a row
+    when both pixels of a low-coverage pair are cleared, and a one-pixel dot
+    off the axis (a colon's, a dieresis's) vanishes. The union is kept when it
+    keeps the count, or comes closer to it.
     Returns (rows, coverage, orbit) where orbit(y, x) lists a pixel's images
     under both flips, for thinning in symmetric groups."""
     orig = orig or cover
+
+    def connected_pass(rows, cover, lr_, tb_):
+        n = pieces(rows)
+        out, cov = _mirror_pass(rows, cover, orig, lr_, tb_)
+        if pieces(out) != n:
+            u = _mirror_pass(rows, cover, orig, lr_, tb_, union=True)
+            if abs(pieces(u[0]) - n) <= abs(pieces(out) - n):
+                out, cov = u
+        return out, cov
+
     if lr:
         # The solidity test must not see left and right differently, or the
         # top-bottom pass decides the two sides of a row inconsistently.
@@ -392,9 +483,9 @@ def symmetrize(rows, cover, lr, tb, orig=None):
         if xs:
             x0, x1 = xs[0], xs[-1]
             orig = [[max(r[x], r[x0 + x1 - x]) if x0 <= x <= x1 else r[x] for x in range(len(r))] for r in orig]
-        rows, cover = _mirror_pass(rows, cover, orig, True, False)
+        rows, cover = connected_pass(rows, cover, True, False)
     if tb:
-        rows, cover = _mirror_pass(rows, cover, orig, False, True)
+        rows, cover = connected_pass(rows, cover, False, True)
     ink = [[c == '#' for c in r] for r in rows]
     h, w = len(ink), len(ink[0]) if ink else 0
     ys = [y for y in range(h) if any(ink[y])]
@@ -436,11 +527,64 @@ def bar_thickness(rows_H):
     return max(1, sum(1 for r in rows_H if r[mid] == '#'))
 
 
+def bridge(rows, cover, want, orbit=None):
+    """Ink the best-covered clear pixel that touches two pieces (with its
+    mirror orbit), until no more than `want` pieces remain or no single pixel
+    joins two. For drawings the monochrome render or a pass left in more
+    pieces than the outline has."""
+    ink = [[c == '#' for c in r] for r in rows]
+    h, w = len(ink), len(ink[0]) if ink else 0
+    for _ in range(12):
+        if pieces(ink) <= want:
+            break
+        lab, n = {}, 0
+        todo = {(y, x) for y in range(h) for x in range(w) if ink[y][x]}
+        while todo:
+            n += 1
+            stack = [todo.pop()]
+            while stack:
+                y, x = stack.pop()
+                lab[(y, x)] = n
+                for dy in (-1, 0, 1):
+                    for dx in (-1, 0, 1):
+                        q = (y + dy, x + dx)
+                        if q in todo:
+                            todo.remove(q)
+                            stack.append(q)
+        best = None
+        for y in range(h):
+            for x in range(w):
+                if ink[y][x] or cover[y][x] <= 0:
+                    continue
+                near = {lab[(y + dy, x + dx)] for dy in (-1, 0, 1) for dx in (-1, 0, 1) if (y + dy, x + dx) in lab}
+                if len(near) >= 2 and (best is None or cover[y][x] > best[0]):
+                    best = (cover[y][x], y, x)
+        if best is None:
+            break
+        for py, px in (orbit(best[1], best[2]) if orbit else [(best[1], best[2])]):
+            if 0 <= py < h and 0 <= px < w:
+                ink[py][px] = True
+    return [''.join('#' if v else '.' for v in r) for r in ink]
+
+
+def outline_pieces(face, cp):
+    """Pieces of the unhinted outline rendered at four times the grid: what the drawing should have."""
+    face.load_char(cp, freetype.FT_LOAD_TARGET_MONO | freetype.FT_LOAD_NO_HINTING)
+    face.glyph.render(freetype.FT_RENDER_MODE_MONO)
+    bm = face.glyph.bitmap
+    if not bm.rows:
+        return 0
+    buf = np.frombuffer(bytes(bm.buffer), dtype=np.uint8).reshape(bm.rows, bm.pitch)
+    return pieces(np.unpackbits(buf, axis=1)[:, :bm.width].astype(bool).tolist())
+
+
 def render_font(path, grid, smear, stem):
     face = freetype.Face(path)
     prop = _XHeightProp(ctypes.cast(face._FT_Face, ctypes.c_void_p).value, 0)
     freetype.raw.FT_Property_Set(freetype.get_handle(), b'autofitter', b'increase-x-height', ctypes.byref(prop))
     face.set_pixel_sizes(0, grid)
+    big = freetype.Face(path)
+    big.set_pixel_sizes(0, grid * 4)
     flags = freetype.FT_LOAD_TARGET_MONO | freetype.FT_LOAD_FORCE_AUTOHINT
     face.load_char('H', flags)
     face.glyph.render(freetype.FT_RENDER_MODE_MONO)
@@ -465,6 +609,7 @@ def render_font(path, grid, smear, stem):
                         cover[yy][xx] = v / 255.0
             name = names.get(cp, '')
             lr, tb = name in SYM_LR, name in SYM_TB
+            orbit = None
             if lr or tb:
                 orig = cover
                 rows, cover, orbit = symmetrize(rows, cover, lr, tb, orig)
@@ -473,6 +618,10 @@ def render_font(path, grid, smear, stem):
                 rows = thin(rows, cover, k=stem, h=bar, orbit=orbit)
             else:
                 rows = thin(rows, cover, k=stem, h=bar)
+            if pieces(rows) > 1:
+                want = outline_pieces(big, cp)
+                if pieces(rows) > want:
+                    rows = bridge(rows, cover, want, orbit)
             if lr:
                 left = center_in_advance(rows, left, adv)
         if smear and rows:
@@ -480,6 +629,350 @@ def render_font(path, grid, smear, stem):
                             for i in range(len(line) + smear)) for line in rows]
         out[cp] = (rows, left, top, adv + smear)
     return out
+
+
+# --- Derived glyphs ---------------------------------------------------------
+# Letters that share a part are drawn from one master instead of rendered
+# alone, so b d p q share one bowl, n h u one arch, and an accented letter is
+# its base letter's drawing with the accent set over it. Each rule runs after
+# rendering, thinning, and mirroring; the derived drawing goes into
+# <weight>.txt like any other, and <weight>.overrides.txt still wins at build
+# time. The rules read the rendered masters, not their overrides: a hand fix
+# to `b` does not reach `d`; override both, or switch the rule off here.
+# The same goes for the dots: the source builds the colon from two periods and
+# the semicolon from a period over the comma's drawing, so they are assembled
+# from the rendered period and comma (see `punctuation`).
+#
+#   target  how        master  grids (None: every grid)
+DERIVE = [
+    ('d', 'mirror', 'b', None),      # b mirrored, at d's own left bearing
+    ('p', 'bowl', 'b', None),        # b's x-height band flipped top to bottom, over p's own descender
+    ('q', 'mirror', 'p', None),      # the derived p mirrored
+    ('h', 'arch', 'n', None),        # n's x-height band under h's own ascender
+    ('u', 'turn', 'n', None),        # n turned half a turn about the x-height band
+]
+ACCENTS = None                       # grids that compose accented letters from base + accent; None: every grid
+# A rule is skipped for a grid and weight when the source itself draws the two
+# letters differently: rendered unhinted at GUARD_PPEM, the master, transformed,
+# must have the target's height to within half a grid pixel and differ from it
+# by under GUARD grid pixels of mean outline offset (the pixels that differ
+# over the outline's length). The source's b d p q and n h u differ by at most
+# 0.11 px at grids 7 to 42 in every weight. At 43 to 48 the grid keeps the top
+# overshoot row and flattens the bottom one, so b's bowl flipped is not p's
+# (0.26 to 0.33 px) and n turned is one row taller than u: those are skipped.
+GUARD, GUARD_PPEM = 0.2, 256
+
+
+def to_pixels(rows, left, top):
+    """A drawing as a set of (y, x): y counts rows up from the baseline (0 is the row on it), x from the origin."""
+    return {(top - 1 - i, left + j) for i, r in enumerate(rows) for j, c in enumerate(r) if c == '#'}
+
+
+def from_pixels(px):
+    if not px:
+        return [], 0, 0
+    ys, xs = [y for y, _ in px], [x for _, x in px]
+    top, left = max(ys) + 1, min(xs)
+    w, h = max(xs) - left + 1, top - min(ys)
+    return [''.join('#' if (top - 1 - i, left + j) in px else '.' for j in range(w)) for i in range(h)], left, top
+
+
+def x_span(px):
+    xs = [x for _, x in px]
+    return min(xs), max(xs)
+
+
+def mirrored(px, at):
+    """Mirror left-right, the ink's left edge at x = at."""
+    a, b = x_span(px)
+    return {(y, at + b - x) for y, x in px}
+
+
+def shifted(px, at):
+    a, _ = x_span(px)
+    return {(y, x - a + at) for y, x in px}
+
+
+def derive_glyph(how, src, dst, xh):
+    """(pixels, advance) of dst re-drawn from src. src and dst are (pixels, advance).
+    The target keeps its own left bearing; its advance moves only by the change
+    in ink width, so a derived letter is never re-spaced."""
+    (S, _), (D, dadv) = src, dst
+    lsb, (d0, d1) = x_span(D)[0], x_span(D)
+    if how == 'mirror':
+        new = mirrored(S, lsb)
+    elif how == 'turn':
+        new = {(xh - 1 - y, x) for y, x in mirrored(S, lsb)}
+    elif how == 'bowl':
+        bowl = {(xh - 1 - y, x) for y, x in S if 0 <= y < xh}
+        new = {(y, x) for y, x in D if not 0 <= y < xh} | shifted(bowl, lsb)
+    elif how == 'arch':
+        # h's stem runs on through the band: keep its own ink in the stem's
+        # columns, or the overshoot row and n's notched shoulder cut it.
+        stem = {x for y, x in D if y == xh}
+        new = ({(y, x) for y, x in D if y >= xh or x in stem}
+               | shifted({(y, x) for y, x in S if 0 <= y < xh}, lsb))
+    else:
+        raise ValueError(how)
+    a, b = x_span(new)
+    return new, dadv + (b - a) - (d1 - d0)
+
+
+def accent_parts(ch):
+    """(base char, is cedilla) for a Latin-1 letter that is a base plus one mark, or None."""
+    nfd = unicodedata.normalize('NFD', ch)
+    if len(nfd) != 2 or not nfd[0].isalpha() or nfd[0] == 'j':
+        return None
+    return nfd[0], nfd[1] == '\u0327'
+
+
+def body(px, top_row, cedilla):
+    """The pixels of a letter's body: below the base letter's top row, and above the baseline under a cedilla."""
+    return {(y, x) for y, x in px if y < top_row and (y >= 0 or not cedilla)}
+
+
+def touching(a, b):
+    """True when a pixel of a has a pixel of b beside it, diagonals included."""
+    return any((y + dy, x + dx) in b for y, x in a for dy in (-1, 0, 1) for dx in (-1, 0, 1))
+
+
+def groups(px):
+    """A set of pixels as its 8-connected pieces."""
+    todo, out = set(px), []
+    while todo:
+        stack = [todo.pop()]
+        piece = set(stack)
+        while stack:
+            y, x = stack.pop()
+            for dy in (-1, 0, 1):
+                for dx in (-1, 0, 1):
+                    q = (y + dy, x + dx)
+                    if q in todo:
+                        todo.remove(q)
+                        piece.add(q)
+                        stack.append(q)
+        out.append(piece)
+    return out
+
+
+def compose(base, accented, top_row, cedilla, room, own=False):
+    """base's drawing with the accent of `accented` over it, moved with the base's centre.
+    With `own`, the other way round: the base's drawing is moved under the
+    accent, and the letter keeps its own advance.
+
+    The accent is what the accented render has above the base letter's top
+    row. Where the hinter drew the body one row taller under an accent than
+    alone (y and u at 44 rows and up), that row is body, not accent: a piece
+    lying wholly in the first row and touching the body below is dropped when
+    there is accent above it. An accent that would touch the base letter goes
+    up a row when the line box has one to spare (`room`, the box's ascent in
+    rows), so the two stay apart; in a full box it stays where it is."""
+    (B, badv), (A, aadv) = base, accented
+    keep = body(A, top_row, cedilla)
+    accent = A - keep
+    if not accent or not keep:
+        return None
+    if not cedilla:
+        parts = groups(accent)
+        stubs = [p for p in parts if all(y == top_row for y, _ in p) and touching(p, keep)]
+        if stubs and len(stubs) < len(parts):
+            accent = set().union(*(p for p in parts if p not in stubs))
+    (a0, a1), (b0, b1) = x_span(keep), x_span(body(B, top_row, cedilla) or B)
+    dx = int(round(((b0 + b1) - (a0 + a1)) / 2))
+    if own:
+        B, badv = {(y, x - dx) for y, x in B}, aadv
+    else:
+        accent = {(y, x + dx) for y, x in accent}
+    if not cedilla and touching(accent, B) and max(y for y, _ in accent) + 2 <= room:
+        accent = {(y + 1, x) for y, x in accent}
+    return B | accent, badv
+
+
+SITS = ',\u201a\u201e'                 # marks that hang from the baseline row
+
+
+def punctuation(px, outl, put):
+    """The comma, colon and semicolon from their parts, as the source builds them.
+
+    The comma and the low quotes are the right quote's drawing moved down, and
+    its top is over half a pixel above the baseline at every grid; where the
+    hinter set the whole mark below the baseline it is moved up to sit on it,
+    unless it is a single row, which on the baseline would be a period.
+    The colon is the period twice, the upper one topping out where the
+    rendered colon does. The semicolon is the comma's drawing with the period
+    over it at the colon's height, moved right by the difference of the two
+    advances, as in the source."""
+    def has(ch):
+        return bool(px.get(ord(ch), ((), 0))[0])
+
+    for ch in SITS:
+        if has(ch) and outl.get(ch)[1] >= outl.px / 2:
+            S, adv = px[ord(ch)]
+            top = max(y for y, _ in S)
+            if top < 0 and min(y for y, _ in S) < top:
+                put(ord(ch), ({(y - top, x) for y, x in S}, adv))
+    if not (has('.') and has(':')):
+        return
+    (D, dadv), (C, _) = px[ord('.')], px[ord(':')]
+    up = max(y for y, _ in C) - max(y for y, _ in D)
+    if up - 1 <= max(y for y, _ in D) - min(y for y, _ in D):
+        return                                # no clear row between the two dots: keep the renders
+    put(ord(':'), (D | {(y + up, x) for y, x in D}, dadv))
+    if has(',') and has(';'):
+        (L, ladv), (_, sadv) = px[ord(',')], px[ord(';')]
+        dx = min(1, max(0, sadv - ladv))
+        dot = {(y + up, x + dx) for y, x in D}
+        if not touching(dot, L):
+            put(ord(';'), (L | dot, ladv + dx))
+
+
+class Outlines:
+    """The warped source at GUARD_PPEM, unhinted, for the design guard."""
+
+    def __init__(self, path, grid, ovs):
+        self.face = freetype.Face(path)
+        self.face.set_pixel_sizes(0, GUARD_PPEM)
+        self.cache = {}
+        self.px = GUARD_PPEM / grid                  # one grid pixel at this size
+        self.band = self.get('x')[1] + round(ovs * self.px)
+
+    def get(self, ch):
+        if ch not in self.cache:
+            self.face.load_char(ch, freetype.FT_LOAD_TARGET_MONO | freetype.FT_LOAD_NO_HINTING)
+            self.face.glyph.render(freetype.FT_RENDER_MODE_MONO)
+            bm = self.face.glyph.bitmap
+            buf = np.frombuffer(bytes(bm.buffer), dtype=np.uint8).reshape(bm.rows, bm.pitch)
+            self.cache[ch] = (np.unpackbits(buf, axis=1)[:, :bm.width].astype(bool), self.face.glyph.bitmap_top)
+        return self.cache[ch]
+
+    def rows(self, ch, lo=None, hi=None):
+        """The outline's ink between rows lo and hi above the baseline, cropped."""
+        a, top = self.get(ch)
+        y = top - 1 - np.arange(a.shape[0])
+        a = a[((y >= lo) if lo is not None else True) & ((y < hi) if hi is not None else True)] if (lo, hi) != (None, None) else a
+        ys, xs = np.where(a)
+        return a[ys.min():ys.max() + 1, xs.min():xs.max() + 1] if len(ys) else a[:0, :0]
+
+    def gap(self, a, b):
+        """Mean offset between two outlines aligned at the ink's top left, in grid
+        pixels: differing pixels over the outline's length (its edge pixels).
+        Infinite when the heights differ by half a grid pixel or more."""
+        if abs(a.shape[0] - b.shape[0]) >= self.px / 2:
+            return float('inf')
+        h, w = max(a.shape[0], b.shape[0]), max(a.shape[1], b.shape[1])
+        A, B = np.zeros((h, w), bool), np.zeros((h, w), bool)
+        A[:a.shape[0], :a.shape[1]], B[:b.shape[0], :b.shape[1]] = a, b
+        P = np.pad(A, 1)
+        edge = A & ~(P[:-2, 1:-1] & P[2:, 1:-1] & P[1:-1, :-2] & P[1:-1, 2:])
+        return float((A ^ B).sum()) / max(1, int(edge.sum())) / self.px
+
+    def rule_gap(self, how, src, dst):
+        xh = self.band
+        if how == 'mirror':
+            return self.gap(self.rows(src)[:, ::-1], self.rows(dst))
+        if how == 'turn':
+            return self.gap(self.rows(src)[::-1, ::-1], self.rows(dst))
+        if how == 'bowl':
+            return self.gap(self.rows(src, 0, xh)[::-1], self.rows(dst, 0, xh))
+        if how == 'arch':
+            return self.gap(self.rows(src, 0, xh), self.rows(dst, 0, xh))
+        raise ValueError(how)
+
+    def accent_gap(self, base, ch, top_row, cedilla):
+        lo = 0 if cedilla else None
+        return self.gap(self.rows(base, lo, top_row), self.rows(ch, lo, top_row))
+
+
+def derive(rendered, path, grid, ovs, room):
+    """Apply DERIVE, the punctuation and the accent rule to one grid and
+    weight's drawings, in place. Returns (rules applied, rules skipped by the
+    guard). The bowl and arch band runs from the baseline to the x-height plus
+    the overshoot row, where a grid keeps one. `room` is the line box's ascent
+    in rows: an accent moved clear of its letter stays inside it."""
+    outl = Outlines(path, grid, ovs)
+    px = {cp: (to_pixels(r, l, t), adv) for cp, (r, l, t, adv) in rendered.items()}
+    xh = rendered[ord('x')][2] + ovs
+    done, skipped = collections.Counter(), []
+
+    def put(cp, new):
+        rows, left, top = from_pixels(new[0])
+        rendered[cp] = (rows, left, top, new[1])
+        px[cp] = new
+
+    for target, how, master, on in DERIVE:
+        t, s = ord(target), ord(master)
+        if (on is not None and grid not in on) or not (px.get(t, ({}, 0))[0] and px.get(s, ({}, 0))[0]):
+            continue
+        g = outl.rule_gap(how, master, target)
+        if g > GUARD:
+            skipped.append(f'{target}<{master} ' + ('height' if g == float('inf') else f'{g:.2f}px'))
+            continue
+        put(t, derive_glyph(how, px[s], px[t], xh))
+        done[target] += 1
+    punctuation(px, outl, put)
+    dotted = {}                                             # dieresis letters composed below, and the base each stands on
+    if ACCENTS is None or grid in ACCENTS:
+        for cp in [c for c in rendered if 0xC0 <= c < 0x100]:
+            parts = accent_parts(chr(cp))
+            if not parts or ord(parts[0]) not in px or not px[cp][0]:
+                continue
+            base, cedilla = parts
+            # An accent takes the place of i's dot: the base is i's stem, which
+            # the source draws as the dotless i, and the accent is what lies
+            # above that. These four keep their own advance and the stem goes
+            # where they rendered it: the accents are wider than i, the hinter
+            # gives them another advance than i's at about half the sizes, and
+            # on i's advance they ran into f, l, b, k and d twice as often.
+            shape = '\u0131' if base == 'i' else base
+            if ord(shape) not in px or not px[ord(shape)][0]:
+                continue
+            top_row = rendered[ord(shape)][2]               # the accent is what lies above the base letter's top
+            g = outl.accent_gap(shape, chr(cp), outl.get(shape)[1], cedilla)
+            if g > GUARD:
+                skipped.append(f'{chr(cp)}<{base} ' + ('height' if g == float('inf') else f'{g:.2f}px'))
+                continue
+            B, badv = px[ord(base)]
+            if base == 'i':
+                B = {(y, x) for y, x in B if y < top_row}
+            new = compose((B, badv), px[cp], top_row, cedilla, room, own=base == 'i')
+            if new:
+                put(cp, new)
+                done['accented'] += 1
+                if base != 'i' and unicodedata.normalize('NFD', chr(cp))[1] == '\u0308':
+                    dotted[cp] = B
+    # A dieresis is two dots. Where one came out as a single piece (the mirror
+    # pass filled the gap, or the render did) and another letter of the same
+    # case has two at this size, it takes that pair, centred where its own
+    # was: a pair with two like dots before a lopsided one, then the one
+    # nearest its own in width. Over a letter that is its own mirror image the
+    # pair is centred on the letter instead when its own mark was off it.
+    pairs = {cp: px[cp][0] - B for cp, B in dotted.items()}
+    for cp, B in dotted.items():
+        if len(groups(pairs[cp])) != 1:
+            continue
+        a0, a1 = x_span(pairs[cp])
+        donors = [(d != mirrored(d, x_span(d)[0]), abs((x_span(d)[1] - x_span(d)[0]) - (a1 - a0)), c)
+                  for c, d in pairs.items() if chr(c).isupper() == chr(cp).isupper() and len(groups(d)) == 2]
+        if not donors:
+            continue
+        d = pairs[min(donors)[2]]
+        d0, d1 = x_span(d)
+        dx = int(round(((a0 + a1) - (d0 + d1)) / 2))
+        b0, b1 = x_span(B)
+        if B == mirrored(B, b0):
+            while (d0 + d1) / 2 + dx - (b0 + b1) / 2 > 0.5:
+                dx -= 1
+            while (b0 + b1) / 2 - (d0 + d1) / 2 - dx > 0.5:
+                dx += 1
+        new = {(y, x + dx) for y, x in d}
+        low = min(y for y, _ in new) - (max(y for y, _ in B) + 1)
+        new = {(y - max(0, low - 1), x) for y, x in new}    # no further off this letter than one clear row
+        if touching(new, B) and max(y for y, _ in new) + 2 <= room:
+            new = {(y + 1, x) for y, x in new}
+        if not touching(new, B):
+            put(cp, (B | new, px[cp][1]))
+            done['dieresis'] += 1
+    return done, skipped
 
 
 def write(path, grid, weight, note, m, ascent, descent, rendered):
@@ -490,21 +983,27 @@ def write(path, grid, weight, note, m, ascent, descent, rendered):
                  f'# grid: {grid}\n# ascent: {ascent}\n# descent: {descent}\n# cap: {m["cap"]}\n# xheight: {m["x"]}\n\n')
         for cp in charset:
             rows, left, top, adv = rendered[cp]
-            width = max(adv, left + (len(rows[0]) if rows else 0), 1) + 1
+            # The box starts at the origin, or at the ink's left edge when that
+            # lies left of it; `left` says where, and the build adds it back.
+            off = min(left, 0)
+            width = max(adv, left + (len(rows[0]) if rows else 0), 1) - off + 1
             box = [['.'] * width for _ in range(ascent + descent)]
             for i, r in enumerate(rows):
                 y = ascent - top + i
                 if 0 <= y < len(box):
                     for j, ch in enumerate(r):
-                        x = left + j
+                        x = left - off + j
                         if ch == '#' and 0 <= x < width:
                             box[y][x] = '#'
-            extra = f'\nleft: {left}' if left < 0 else ''
+            written = sum(b.count('#') for b in box)
+            assert written == sum(r.count('#') for r in rows), f'{names[cp]} at {grid} {weight}: ink lost in the box'
+            extra = f'\nleft: {off}' if off < 0 else ''
             fh.write(f'name: {names[cp]}\nunicode: U+{cp:04X}\nadvance: {adv}{extra}\n\n'
                      + '\n'.join(''.join(b) for b in box) + '\n\n')
 
 
 tmp = tempfile.mkdtemp()
+started = time.time()
 for grid in grids:
     opsz = min(32, max(14, grid))
     d = measure(opsz)
@@ -514,7 +1013,7 @@ for grid in grids:
     s_reg = max(1, round(ratio['regular'] * grid))
     targets = {'light': max(1, round(ratio['light'] * grid)), 'regular': s_reg,
                'bold': max(s_reg + 1, round(ratio['bold'] * grid))}
-    rendered, notes = {}, {}
+    rendered, notes, derived, paths = {}, {}, {}, {}
     for weight in weights:
         px = targets[weight]
         wght = weight_for_stem(px * unit, opsz)
@@ -524,11 +1023,20 @@ for grid in grids:
         path = os.path.join(tmp, f'inter-{grid}-{weight}.ttf')
         font.save(path)
         rendered[weight] = render_font(path, grid, smear, stem=px - smear)
+        paths[weight] = path
         notes[weight] = f'opsz {opsz}, wght {wght}, stem {px}px, bar {bar_thickness(bitmap_rows_of_H(path, grid))}px' + (f', smear {smear}' if smear else '')
-    # One line box per grid, shared by every weight.
+    # One line box per grid, shared by every weight. The ascent is fixed by
+    # the renders, before the derived stage, which works inside it. The descent
+    # is the metric row unless ink goes deeper.
     ascent = max([m['asc'] + 1] + [top for r in rendered.values() for rows, _, top, _ in r.values() if rows])
+    if not opt.no_derive:
+        for weight in weights:
+            done, skipped = derive(rendered[weight], paths[weight], grid, m['ovs'], ascent)
+            derived[weight] = f'derived {sum(done.values())}' + (f', skipped {" ".join(skipped)}' if skipped else '')
+        assert ascent == max([ascent] + [top for r in rendered.values() for rows, _, top, _ in r.values() if rows]), f'{grid}: the derived stage left the line box'
     descent = max([m['desc']] + [len(rows) - top for r in rendered.values() for rows, _, top, _ in r.values() if rows])
     for weight in weights:
         write(os.path.join(opt.out, str(grid), weight + '.txt'), grid, weight, notes[weight], m, ascent, descent, rendered[weight])
     print(f'grid {grid:2d}: x {m["x"]} cap {m["cap"]} asc {m["asc"]} desc {m["desc"]} ovs {m["ovs"]} | box {ascent}+{descent} | '
-          + ' | '.join(f'{w} {notes[w]}' for w in weights))
+          + ' | '.join(f'{w} {notes[w]}' + (f', {derived[w]}' if w in derived else '') for w in weights), flush=True)
+print(f'{len(grids)} grids in {time.time() - started:.0f} s')
