@@ -22,8 +22,17 @@ Drawings on different grids have different rectangle counts, so every glyph
 is padded to the largest count with zero-size rectangles; the padding is
 never rendered because no interpolation ever is. Metrics vary per master
 through MVAR so the baseline lands on a whole pixel at every exact size.
+
+The line box is the header's ascent and descent: hhea and the OS/2 typo
+metrics are set from it (USE_TYPO_METRICS is on), so line spacing is the box.
+A drawing may ink above it: an accent raised clear of its capital sits up to
+`above` rows over the ascent, and the bitmaps are that many rows taller.
+usWinAscent and usWinDescent, the clipping box, are the tallest and deepest
+ink of any drawing in the file as a fraction of the em, the same in every
+master, so no size is clipped whether or not a renderer applies MVAR to them.
 """
 import argparse
+import functools
 import json
 import os
 import re
@@ -75,7 +84,9 @@ def parse(path):
 
 
 def load(path):
-    """A generated source plus its hand overrides, as (ascent, descent, cap, xheight, glyphs)."""
+    """A generated source plus its hand overrides, as (ascent, descent, cap, xheight, glyphs, top).
+    Every bitmap is top + descent rows: `top` is the ascent plus the header's
+    `above`, the rows a raised accent may take over the line box."""
     meta, glyphs = parse(path)
     override = path[:-4] + '.overrides.txt'
     if os.path.exists(override):
@@ -84,14 +95,20 @@ def load(path):
     grid = int(meta['grid'])
     ascent = int(meta['ascent'])
     descent = int(meta.get('descent', grid - ascent))
-    return ascent, descent, int(meta.get('cap', 0)), int(meta.get('xheight', 0)), glyphs
+    top = ascent + int(meta.get('above', 0))
+    for name, g in glyphs.items():
+        assert len(g['rows']) == top + descent, (
+            f'{path}: {name} has {len(g["rows"])} rows, the box is {top} + {descent} '
+            f'(ascent {ascent}, above {top - ascent}, descent {descent})')
+    return ascent, descent, int(meta.get('cap', 0)), int(meta.get('xheight', 0)), glyphs, top
 
 
-def runs(rows, ascent):
-    """[(x, y, length)] per horizontal run; y is the row's bottom edge, baseline 0."""
+def runs(rows, top):
+    """[(x, y, length)] per horizontal run; y is the row's bottom edge, baseline 0.
+    `top` is the number of rows above the baseline."""
     out = []
     for i, line in enumerate(rows):
-        y, x = ascent - 1 - i, 0
+        y, x = top - 1 - i, 0
         while x < len(line):
             if line[x] == '#':
                 x0 = x
@@ -126,12 +143,33 @@ sizes = sorted(served)
 assert DEFAULT in served, f'the default size {DEFAULT} must be an exact size in range'
 
 # Rectangle count per glyph across every grid, for padding.
-count = {n: max(len(runs(m[4][n]['rows'], m[0])) for grid in grids for m in grids[grid].values()) for n in names}
+count = {n: max(len(runs(m[4][n]['rows'], m[5])) for grid in grids for m in grids[grid].values()) for n in names}
+
+
+@functools.lru_cache(None)
+def ink_box(grid):
+    """(rows above the baseline, rows below it) that any drawing of this grid inks, in any weight."""
+    up = down = 0
+    for ascent, descent, _, _, glyphs, top in grids[grid].values():
+        for n in names:
+            inked = [i for i, line in enumerate(glyphs[n]['rows']) if '#' in line]
+            if inked:
+                up, down = max(up, top - inked[0]), max(down, inked[-1] + 1 - top)
+    return up, down
+
+
+# The clipping box, as a fraction of the em: the line box or the ink, whichever
+# reaches further, at the size where that is largest. One value for every
+# master: OS/2 is shared, and a renderer that ignores MVAR must not clip a
+# small size to the default size's box.
+win_ascent = max(max(grids[g]['regular'][0], ink_box(g)[0]) * UPM / g for g in set(served.values()))
+win_descent = max(max(grids[g]['regular'][1], ink_box(g)[1]) * UPM / g for g in set(served.values()))
+win_ascent, win_descent = -int(-win_ascent // 1), -int(-win_descent // 1)        # rounded up
 
 
 def build_master(size, weight_key, style, path):
     grid = served[size]
-    ascent, descent_rows, cap, xh, glyphs = grids[grid][weight_key]
+    ascent, descent_rows, cap, xh, glyphs, top = grids[grid][weight_key]
     px = UPM / grid
     fb = FontBuilder(UPM, isTTF=True)
     fb.setupGlyphOrder(['.notdef'] + names)
@@ -140,7 +178,7 @@ def build_master(size, weight_key, style, path):
     for n in names:
         g = glyphs[n]
         pen = TTGlyphPen(None)
-        rs = [(x + g['left'], y, w) for (x, y, w) in runs(g['rows'], ascent)]
+        rs = [(x + g['left'], y, w) for (x, y, w) in runs(g['rows'], top)]
         for (x, y, w) in rs + [(0, 0, 0)] * (count[n] - len(rs)):
             x0, x1, y0, y1 = round(x * px), round((x + w) * px), round(y * px), round((y + 1) * px)
             pen.moveTo((x0, y1)); pen.lineTo((x1, y1)); pen.lineTo((x1, y0)); pen.lineTo((x0, y0))
@@ -173,7 +211,7 @@ def build_master(size, weight_key, style, path):
     })
     wclass = next(w for k, _, w, _ in WEIGHTS if k == weight_key)
     fb.setupOS2(version=4, sTypoAscender=asc, sTypoDescender=-desc, sTypoLineGap=0,
-                usWinAscent=asc, usWinDescent=desc, sxHeight=round(xh * px), sCapHeight=round(cap * px),
+                usWinAscent=win_ascent, usWinDescent=win_descent, sxHeight=round(xh * px), sCapHeight=round(cap * px),
                 fsSelection=0x80 | (0x20 if weight_key == 'bold' else 0x40 if weight_key == 'regular' else 0), fsType=0,
                 usWeightClass=wclass, achVendID='ARFT')
     fb.setupPost()
@@ -261,9 +299,17 @@ with open(os.path.join(opt.out, 'charset.txt'), 'w') as fh:        # for the spe
 with open(os.path.join(opt.out, 'sizes.json'), 'w') as fh:
     json.dump({'exact': {s: served[s] for s in sizes}, 'grids': sorted(grids),
                'weights': {w: key for key, _, w, _ in WEIGHTS},
+               'box': {s: {'ascent': grids[served[s]]['regular'][0] * s // served[s],
+                           'descent': grids[served[s]]['regular'][1] * s // served[s],
+                           'ink_up': ink_box(served[s])[0] * s // served[s],
+                           'ink_down': ink_box(served[s])[1] * s // served[s]} for s in sizes},
+               'win': {'ascent': win_ascent, 'descent': win_descent, 'upm': UPM},
                'H': {f'{s}/{w}': grids[served[s]][key][4]['H']['advance'] * s / served[s]
                      for s in sizes for key, _, w, _ in WEIGHTS}}, fh)
 print(f'{len(names)} glyphs, grids {sorted(grids)}, {len(sizes)} exact sizes x {len(WEIGHTS)} weights '
       f'= {len(sizes) * len(WEIGHTS)} masters; ttf {os.path.getsize(base + ".ttf") / 1e6:.2f} MB, '
       f'woff2 {os.path.getsize(base + ".woff2") / 1e3:.0f} KB')
+print(f'usWinAscent {win_ascent} usWinDescent {win_descent} (of {UPM}); ink over the line box at: '
+      + (', '.join(f'{s} (+{ink_box(served[s])[0] - grids[served[s]]["regular"][0]})' for s in sizes
+                   if ink_box(served[s])[0] > grids[served[s]]['regular'][0]) or 'no size'))
 print('exact sizes:', ', '.join(f'{s} ({served[s]}×{s // served[s]})' for s in sizes))
