@@ -1,0 +1,23 @@
+advances changed                       43
+drawings                            29862
+drawings changed                     3880
+drawings changed 13-16                868
+drawings changed 17-24                632
+drawings changed 25-48               1987
+drawings changed 7-12                 393
+drawings changed bold                1682
+drawings changed light               1092
+drawings changed regular             1106
+ink after                         3387600
+ink before                        3356091
+pixels changed                      72507
+pixels changed bold                 32265
+pixels changed light                18758
+pixels changed regular              21484
+advances changed by letter: $ {'narrower': 1, 'wider': 1}, > {'narrower': 1}, S {'wider': 1}, ^ {'wider': 1}, r {'wider': 1}, t {'wider': 1}, ° {'narrower': 1}, µ {'wider': 2, 'narrower': 1}, ¸ {'wider': 1}, Ð {'wider': 1}, æ {'wider': 2}, î {'narrower': 1}, Ĉ {'narrower': 1, 'wider': 1}, ĉ {'narrower': 1}, Č {'narrower': 1, 'wider': 1}, č {'narrower': 1}, ĥ {'narrower': 1}, Ĵ {'narrower': 1}, ĵ {'narrower': 1}, œ {'wider': 2}, ř {'wider': 2}, Ŝ {'wider': 1}, ŝ {'narrower': 1}, Š {'wider': 1}, š {'narrower': 1}, ť {'wider': 1}, ž {'narrower': 1}, ˆ {'wider': 3}, ˇ {'wider': 3}, † {'wider': 1}, ₱ {'wider': 1}
+drawings changed by letter (top 40): /:126 \:126 N:125 Ñ:125 v:124 V:124 A:123 W:123 À:123 Á:123 Â:123 Ã:123 Ä:123 Å:123 Y:120 Ý:120 K:119 M:118 y:116 ý:116 ÿ:116 k:116 X:113 Z:110 w:108 z:103 x:98 7:94 !:3 ":3 #:3 $:3 %:3 &:3 ':3 *:3 +:3 -:3 0:3 1:3
+letters with a changed drawing: 231
+apex wider than a leg, A V v, before: 13-16 18, 17-24 39, 25-48 123, 7-12 22, all 202, bold 74, light 65, regular 63
+symmetric letters not mirror-symmetric, before: T 53, W 10, Y 1, all 107, i 42, w 1
+apex wider than a leg, A V v, after: 13-16 18, 17-24 38, 25-48 110, 7-12 24, all 190, bold 62, light 67, regular 61
+symmetric letters not mirror-symmetric, after: T 53, W 2, Y 1, all 99, i 42, w 1

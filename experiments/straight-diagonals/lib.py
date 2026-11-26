@@ -6,6 +6,9 @@ sheet code follow experiments/hand-drawn/lib.py on the plan-hand-drawn branch.
 """
 import os
 import re
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'scripts'))    # diagonals.py
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
@@ -52,9 +55,15 @@ def parse(path):
 _cache = {}
 
 
+def set_root(path):
+    """Read the drawings from another glyph tree (a copy of main's, a trial import)."""
+    global GLYPHS
+    GLYPHS = os.path.abspath(path)
+
+
 def load(grid, weight):
     """(meta, {char: glyph}) for one committed grid and weight, overrides applied."""
-    key = (grid, weight)
+    key = (GLYPHS, grid, weight)
     if key not in _cache:
         path = os.path.join(GLYPHS, str(grid), weight + '.txt')
         meta, glyphs = parse(path)
