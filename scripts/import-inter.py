@@ -38,8 +38,9 @@ is drawn from it:
   round     a round stroke is the stem at its sides and the bar at its top
             and bottom; the erosion takes it down to those.
 
---parity avv|all lets A V v (or those and W w M) change width by a pixel so
-an apex is exactly one stroke wide; it is off by default.
+A V v change width by a pixel where that makes the apex exactly one stroke
+wide (--parity avv, the default). --parity all lets W w M do the same;
+--parity off keeps every width.
 """
 import argparse
 import collections
@@ -73,8 +74,8 @@ args.add_argument('--weights', default='light,regular,bold')
 args.add_argument('--charset', default=os.path.join(HERE, '..', 'charset.txt'))
 args.add_argument('--out', default=os.path.join(HERE, '..', 'glyphs'))
 args.add_argument('--no-derive', action='store_true', help='skip the derivation stage (shared parts, accents)')
-args.add_argument('--parity', default='off', choices=('off', 'avv', 'all'),
-                  help='let A V v (avv) or A V v W w M (all) change width by a pixel for an apex one stroke wide')
+args.add_argument('--parity', default='avv', choices=('off', 'avv', 'all'),
+                  help='let A V v (avv, the default) or A V v W w M (all) change width by a pixel for an apex one stroke wide; off keeps every width')
 args.add_argument('--no-redraw', action='store_true', help='skip the fixed-step redraw of the diagonal letters')
 args.add_argument('--no-bars', action='store_true', help="leave the bars at the source's own thickness")
 opt = args.parse_args()

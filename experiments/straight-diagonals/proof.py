@@ -2,7 +2,8 @@
 
     .venv/bin/python experiments/straight-diagonals/proof.py \\
         --fonts before=PATH/build after=build --sizes 9,12,16,20,24,32,48 \\
-        --out experiments/straight-diagonals/img/proof-1x.png [--scale 4]
+        --out experiments/straight-diagonals/img/proof-1x.png [--scale 4] \\
+        [--text LINE [LINE ...]]
 
 Each `build` directory holds IntegerSans-VF.ttf and display/IntegerSansDisplay-VF.ttf;
 sizes of 25 and up come from the display family. Unhinted, as scripts/check.py
@@ -51,7 +52,7 @@ def main():
     ap.add_argument('--fonts', nargs='+', required=True)
     ap.add_argument('--sizes', default='9,12,16,20,24,32,48')
     ap.add_argument('--weights', default='light,regular,bold')
-    ap.add_argument('--text', default=TEXT)
+    ap.add_argument('--text', nargs='+', default=[TEXT], help='one or more lines; each is set from every font')
     ap.add_argument('--scale', type=int, default=1)
     ap.add_argument('--out', required=True)
     opt = ap.parse_args()
@@ -59,23 +60,24 @@ def main():
     for size in [int(s) for s in opt.sizes.split(',')]:
         for w in opt.weights.split(','):
             rows.append(f'{size} {w}')
-            for f in opt.fonts:
-                label, build = f.split('=', 1)
-                path = os.path.join(build, 'IntegerSans-VF.ttf') if size <= 24 else os.path.join(build, 'display', 'IntegerSansDisplay-VF.ttf')
-                face = freetype.Face(path)
-                face.set_var_design_coords((float(size), float(WGHT[w])))
-                face.set_pixel_sizes(0, size)
-                ink, gray = line(face, opt.text, size)
-                grays += int(gray.sum())
-                im = lib.plain(ink | gray, opt.scale)
-                if gray.any():
-                    px = im.load()
-                    for y, x in zip(*np.where(np.pad(gray, 2))):
-                        for dy in range(opt.scale):
-                            for dx in range(opt.scale):
-                                px[int(x) * opt.scale + dx, int(y) * opt.scale + dy] = (220, 0, 0)
-                rows.append([(label, im)])
-    print(lib.sheet(rows, opt.out, title=f'{opt.text!r} from the built fonts, FreeType unhinted, {opt.scale}x'))
+            for text in opt.text:
+                for f in opt.fonts:
+                    label, build = f.split('=', 1)
+                    path = os.path.join(build, 'IntegerSans-VF.ttf') if size <= 24 else os.path.join(build, 'display', 'IntegerSansDisplay-VF.ttf')
+                    face = freetype.Face(path)
+                    face.set_var_design_coords((float(size), float(WGHT[w])))
+                    face.set_pixel_sizes(0, size)
+                    ink, gray = line(face, text, size)
+                    grays += int(gray.sum())
+                    im = lib.plain(ink | gray, opt.scale)
+                    if gray.any():
+                        px = im.load()
+                        for y, x in zip(*np.where(np.pad(gray, 2))):
+                            for dy in range(opt.scale):
+                                for dx in range(opt.scale):
+                                    px[int(x) * opt.scale + dx, int(y) * opt.scale + dy] = (220, 0, 0)
+                    rows.append([(label, im)])
+    print(lib.sheet(rows, opt.out, title=f"{' | '.join(opt.text)} from the built fonts, FreeType unhinted, {opt.scale}x"))
     print('gray pixels:', grays)
 
 

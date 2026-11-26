@@ -175,16 +175,16 @@ Ranked after those: (v) as a cheap partial step if the heavier diagonals are acc
 
 ## Outcome
 
-Built into the importer after the research above: option (i) as a stage after the erosion (`scripts/diagonals.py`), a stroke table per instance, and option (ii) as `--parity avv|all`, off by default. All 42 grids were regenerated with parity off. Numbers compare `main` at 9eb8f34 with the regenerated drawings.
+Built into the importer after the research above: option (i) as a stage after the erosion (`scripts/diagonals.py`), a stroke table per instance, and option (ii) as `--parity`, with `avv` (A, V, v only) the default. All 42 grids were regenerated with it. Numbers compare `main` at 9eb8f34 with the regenerated drawings; where a third number is given it is the same redraw with parity off, the state of this branch before the default was chosen.
 
 ### What was built
 
-- Redraw. `A V v W w X x Y y K k M N Z z 7 / \` are drawn again from their strokes after the erosion. Stroke ends, bar rows and feet come from the hinted render. 2083 drawings were redrawn. In 52 the redraw was refused and the eroded drawing stayed.
+- Redraw. `A V v W w X x Y y K k M N Z z 7 / \` are drawn again from their strokes after the erosion. Stroke ends, bar rows and feet come from the hinted render. 2085 drawings were redrawn. In 52 the redraw was refused and the eroded drawing stayed.
 - A redraw is taken only when it is one piece, fills the same box, keeps the same counters, is no lighter, and is no less straight than the eroded drawing. That last test is what keeps K from getting worse.
 - `<` and `>` are not redrawn. The recipe was built and removed: it made `<` 24 Regular less even than the erosion does.
 - Diagonal thickness. A stroke leaning s columns a row is stamped stem × √(1 + s²) wide along the row, in whole pixels and never under the stem, so it is as thick across as a stem. Two strokes that cross (X, x) may be 0.6 px thinner across.
 - Bars. Bold bars equal the stem where x-height ≥ 3 × stem + 2 × max(1, stem − 1): three bars and two counters, each counter at least a row and at least the bar less one. That holds at 14, 15 and 16 rows only, where the bar goes from 1 to 2 px. At 7 to 13 the counters of e, a, s would close. From 17 up the rule does not hold either, and the bar is the source's own, one under the stem (two under at 33 to 36).
-- Parity. With `--parity avv`, A, V and v change width by 1 px when width minus stroke is odd. With `--parity all`, W, w and M may too, but only when no stroke gets thinner for it.
+- Parity. A, V and v change width by 1 px when width minus stroke is odd, so the apex is one stroke wide. This is `--parity avv`, the default. With `--parity all`, W, w and M may too, but only when no stroke gets thinner for it. `--parity off` keeps every width.
 
 ### Straightness
 
@@ -193,26 +193,38 @@ Built into the importer after the research above: option (i) as a stage after th
 | | edges | bent | | kinks | uneven | back | thin rows | drawings with a bent edge |
 |---|---|---|---|---|---|---|---|---|
 | main | 1270 | 418 | 32.9% | 88 | 150 | 21 | 445 | 179 |
-| this branch | 1241 | 140 | 11.3% | 20 | 16 | 3 | 22 | 68 |
+| this branch | 1243 | 140 | 11.3% | 20 | 16 | 3 | 22 | 68 |
 
 All 42 grids, 2520 drawings:
 
 | | edges | bent | | kinks | uneven | back | thin rows | drawings with a bent edge |
 |---|---|---|---|---|---|---|---|---|
 | main | 6468 | 3157 | 48.8% | 502 | 1048 | 75 | 3264 | 1296 |
-| this branch | 6295 | 971 | 15.4% | 59 | 174 | 7 | 58 | 434 |
+| this branch | 6297 | 971 | 15.4% | 59 | 174 | 7 | 58 | 434 |
+
+Parity changes none of these counts: with it off the rows are the same but for the edge totals (1241 and 6295).
 
 Bent edges by letter on the ten grids, main then this branch: A 30, 0. V 28, 0. v 16, 0. W 52, 2. w 34, 2. X 24, 0. x 28, 4. Y 10, 0. y 36, 19. K 7, 0. k 6, 3. M 26, 0. N 10, 0. Z 12, 9. z 9, 6. 7 2, 1. `/` 0, 0. `\` 0, 0. `<` 39, 43. `>` 49, 51.
 
 - 94 of the 140 bent edges left on the ten grids are `<` and `>`, which are not redrawn. They are 4 and 2 worse than main. I did not trace which sizes.
 - y keeps a bend where the stroke meets the hook. Z and z keep some where the diagonal meets the bars.
-- The audit from `plan-hand-drawn`, printable ASCII, 11,844 drawings: hard kinks 923 to 104, diagonal glyphs with uneven steps 1080 to 223, N Z z not point-symmetric 283 to 173.
+- The audit from `plan-hand-drawn`, printable ASCII, 11,844 drawings: hard kinks 923 to 104, diagonal glyphs with uneven steps 1080 to 229 (223 with parity off), N Z z not point-symmetric 283 to 173.
 
 ### Doubled apex
 
-End row of A, V, v wider than a leg, of 378 drawings: 202 on main, 190 with parity off. Parity off does not fix it. On the eight grids of the parity sheets (9, 10, 12, 16, 20, 24, 32, 48), of 72: 32 with parity off, 5 with `avv` or `all`. The 5 are at 7 to 12 rows.
+End row of A, V, v wider than a leg, of 378 drawings (42 grids, three weights, `compare.py`):
 
-Cost on those eight grids: `avv` changes 105 advances, all 1 px wider (A 13, V 5, v 9, and the six accented A 13 each). `all` changes 118 (those, and W 7 wider and 2 narrower, w 4 wider).
+| | all | Light | Regular | Bold | A | V | v |
+|---|---|---|---|---|---|---|---|
+| main | 202 | 65 | 63 | 74 | 72 | 61 | 69 |
+| redraw, parity off | 190 | 67 | 61 | 62 | 63 | 60 | 67 |
+| this branch (`avv`) | 24 | 7 | 7 | 10 | 4 | 6 | 14 |
+
+The redraw alone does not fix it; the width change does. The 24 left: v at 7, 8 and 11 in every weight and at 13 and 14 Light and Regular, V at 9 and 12 Light and Regular, A at 8 and 9 Bold, and in Bold v 44, V 45, A 46, V 46, A 47. I did not trace why each of those stays.
+
+On the eight grids of the parity sheets (9, 10, 12, 16, 20, 24, 32, 48), of 72: 37 on main, 32 with parity off, 5 with `avv` or `all`.
+
+Cost: 171 of the 378 A V v drawings are 1 px wider (A 61, V 56, v 54), and so are the six accented A, 61 each: 537 advances, none narrower. The ink grows with the advance, so the side bearings of A, V and v are the same as on main in all 378. By band, A V v only: 9 at 7-12, 14 at 13-16, 38 at 17-24, 110 at 25-48. On the eight sheet grids `avv` changes 105 advances and `all` 118 (those, and W 7 wider and 2 narrower, w 4 wider).
 
 ### Weight consistency
 
@@ -221,49 +233,66 @@ Cost on those eight grids: `avv` changes 105 advances, all 1 px wider (A 13, V 5
 | | stem | bar | diagonal | round | density | diagonal under stem | bar under stem | any |
 |---|---|---|---|---|---|---|---|---|
 | main, Light | 49 | 153 | 96 | 302 | 73 | 96 | 221 | 621 |
-| branch, Light | 40 | 154 | 46 | 302 | 99 | 25 | 222 | 586 |
+| branch, Light | 34 | 154 | 46 | 302 | 104 | 25 | 222 | 586 |
 | main, Regular | 47 | 167 | 176 | 176 | 69 | 176 | 565 | 590 |
-| branch, Regular | 32 | 168 | 49 | 176 | 81 | 34 | 570 | 471 |
+| branch, Regular | 30 | 168 | 49 | 176 | 81 | 34 | 570 | 466 |
 | main, Bold | 36 | 165 | 322 | 212 | 47 | 322 | 983 | 700 |
-| branch, Bold | 29 | 154 | 100 | 208 | 53 | 65 | 898 | 487 |
+| branch, Bold | 29 | 154 | 104 | 208 | 48 | 65 | 899 | 486 |
 
 Glyphs with any deviating stroke, by size band, main then this branch:
 
 | | 7-12 | 13-16 | 17-24 | 25-48 |
 |---|---|---|---|---|
-| Light | 56, 50 | 11, 16 | 50, 57 | 504, 463 |
-| Regular | 56, 50 | 12, 15 | 67, 70 | 455, 336 |
-| Bold | 85, 82 | 20, 16 | 75, 58 | 520, 331 |
+| Light | 56, 53 | 11, 14 | 50, 54 | 504, 465 |
+| Regular | 56, 48 | 12, 13 | 67, 69 | 455, 336 |
+| Bold | 85, 80 | 20, 13 | 75, 58 | 520, 335 |
 
 - Diagonals thinner than the stem: 594 glyphs to 124.
 - Bold bars under the stem at 13 to 16: 115 glyphs to 30. The 30 are at 13 rows, which has no room.
 - Not improved: round strokes (690 to 686) and bars (485 to 476). The erosion still takes the top and bottom of a round letter a row under the bar at large sizes. That is most of the 25-48 column.
-- Worse: density deviations, 189 to 233. Light and Regular at 13 to 24 went up by a few glyphs in the `any` column too. A diagonal rounded up to a whole pixel is darker than its neighbours where it used to be lighter.
+- Worse: density deviations, 189 to 233 (Light 73 to 104, Regular 69 to 81, Bold 47 to 48). Light and Regular at 13 to 24 went up by a few glyphs in the `any` column too. A diagonal rounded up to a whole pixel is darker than its neighbours where it used to be lighter.
+- With parity off the `any` column was 586, 471 and 487 and density 99, 81 and 53: the width change moves a handful of glyphs each way and the totals stay (any 1544 to 1538, density 233 and 233).
 - Full tables per instance, with the worst glyphs named: `weight-main.txt` and `weight.txt`.
 
 ### Cost
 
-- 3880 of 29,862 drawings changed, 72,507 pixels. By band: 7-12 393, 13-16 868, 17-24 632, 25-48 1987. By weight: Light 1092, Regular 1106, Bold 1682. Ink 3,356,091 to 3,387,600 pixels.
-- 43 advances changed, none on a redrawn letter. They come from the bar refit at 14 to 16 Bold, where the hinter rounds a few letters another way (S, r, t, $, µ, æ, œ and accented forms). The list is in `compare.txt`.
-- Import time: 6 min 46 s for the 42 grids (405 s of user time; the last full run before this change took 412 s).
-- The audit also moved the wrong way on three lines: glyphs with a blob wider than the stroke 251 to 727, top-bottom asymmetric 75 to 114, one-pixel dents 2522 to 2683. I did not trace them. The joins of the redrawn letters (apex, vertex, where two strokes meet) are the likely place.
+- 3894 of 29,862 drawings changed, 85,671 pixels. By band: 7-12 393, 13-16 882, 17-24 632, 25-48 1987. By weight: Light 1099, Regular 1113, Bold 1682. Ink 3,356,091 to 3,387,346 pixels. (Parity off: 3880 drawings, 72,507 pixels.)
+- 580 advances changed. 537 are the parity change: A, V, v and the six accented A, 1 px wider. The other 43 are on no redrawn letter (28 wider, 15 narrower by 1 px). They come from the bar refit at 14 to 16 Bold, where the hinter rounds a few letters another way (S, r, t, $, µ, æ, œ and accented forms). The list is in `compare.txt`.
+- Import time: 6 min 46 s for the 42 grids (405 s with parity off, 406 s with `avv`; the last full run before this change took 412 s).
+- The audit also moved the wrong way on three lines: glyphs with a blob wider than the stroke 251 to 716, top-bottom asymmetric 75 to 114, one-pixel dents 2522 to 2687. I did not trace them. The joins of the redrawn letters (apex, vertex, where two strokes meet) are the likely place.
 
 ### Guarantees from the two earlier importer changes
 
 Unchanged: colon and semicolon built from the period and comma in 126 of 126 files, accented letters whose base differs 0 of 6174, 1 accent touching its letter (Ü at 7 rows), at most 1 row of ink above the ascent. Drawings above the ascent: 108 in 39 files before, 112 in 38 after. Drawings in more pieces than at 40 Regular: 84 before and after.
 
+### Spacing
+
+The width change moves advances, so the spacing was measured and looked at.
+
+- Side bearings. In all 378 A V v drawings both bearings are what they are on main. Where the letter is wider, the ink and the advance grew by the same pixel.
+- Least white gap on a shared row between A, V or v and each of A-Z a-z 0-9, both orders, 46,872 pairs over the 126 instances, main to this branch: same in 40,077, 1 px wider in 3493, 2 px wider in 52, 1 px closer in 3237, 2 or 3 px closer in 13. Pairs that touch: 1196 on main, 1302 here; 111 touch here and not on main: 76 at 7 to 12 rows, 33 in Bold above that (`kv` 16, `KV` 10), 2 in Regular. With parity off it was 1308 and 117: the closer pairs come from the redraw, whose legs run to the corners of the box, not from the width change.
+- From the built fonts (FreeType), the width in pixels of `AVAVA vavav WAVY wavy MIXTAPE KNOX Hamburgefonstiv`, main to this branch: 10 px 306 to 306 and Bold 336 to 336; 12 px 351 to 356, Bold 386 to 399; 16 px 456 to 456, Bold 474 to 480; 20 px 570 to 580, Bold 604 to 609; 24 px 674 to 684, Bold 710 to 718; 32 px 869 to 869, Bold 932 to 945. The 16 Bold figure includes the bar refit's advances.
+- In those lines `AV` and `VA` are 1 px further apart than on main at 12 Bold, 16, 20, 24 Regular and 32 Bold, and 1 px closer at 10 px, where no advance changed. `av` and `Av` are 1 px closer at 10 px (2 to 1) and `va`, `av` at 12 Bold (2 to 1). The font has no kerning, on main or here.
+
+`proof-1x.png` and `proof-4x.png` set that line and `Vav Ava Avo Tav` at 10, 12, 16, 20, 24 and 32 px, Regular and Bold, main above this branch. What I saw: from 12 px up the lines are a few pixels longer and read as evenly spaced as main's; I could not pick out a pair that looks wrong. At 10 px Bold the A V v pairs are visibly tighter than on main (`Vav Ava` nearly closes up inside the words); that is the redraw, and it is the same with parity off.
+
+### `/` and `\`
+
+Set side by side in the diagonal sheets, `/\` reads as one `Λ` at 12, 24 and 32 Bold. That is not from this branch. The advance and both side bearings of `/` and `\` are the same as on main in all 126 instances, in the drawings and in the built fonts at the six proof sizes. On main the two already touch at the top: 93 of the 126 instances have no white column between the top of `/` and the top of `\` (at 12, 24 and 32 Bold both bearings are 0), and the same 93 here. The source draws the slash with almost no side bearing. The one difference is 22 Light, where the least gap went from 2 to 1 with unchanged bearings. Nothing was changed for this.
+
 ### Pictures
 
-Main above, this branch below.
+Main above, this branch below. The diagonal, alphabet, bar and proof sheets show the committed drawings (parity `avv`). The three parity sheets are the trial on eight grids that the default was chosen from; their middle rows are the committed drawings at those grids.
 
 ![diagonal letters, bold](../../experiments/straight-diagonals/img/diag-bold.png)
 ![diagonal letters, regular](../../experiments/straight-diagonals/img/diag-regular.png)
 ![proof line from the built fonts, 4x](../../experiments/straight-diagonals/img/proof-4x.png)
 ![bold bars at 14 to 16](../../experiments/straight-diagonals/img/bars-bold.png)
+![the two proof lines from the built fonts, 1x](../../experiments/straight-diagonals/img/proof-1x.png)
 ![parity off, A V v, all: bold](../../experiments/straight-diagonals/img/parity-bold.png)
 ![parity off, A V v, all: regular](../../experiments/straight-diagonals/img/parity-regular.png)
 
-Also in `img/`: `diag-light.png`, `alpha-light.png`, `alpha-regular.png`, `alpha-bold.png`, `proof-1x.png`, `parity-light.png`.
+Also in `img/`: `diag-light.png`, `alpha-light.png`, `alpha-regular.png`, `alpha-bold.png`, `parity-light.png`.
 
 What I saw in them:
 
@@ -273,17 +302,25 @@ What I saw in them:
 - Bold at 14 to 16 is plainly heavier than on main: every bar doubled. The counters of e, a, s stay open. 16 Bold now has bars at the stem and 17 Bold has them one under.
 - At 32 and 48 Regular, X, x, K and k look a little heavier than on main. The measure says they are now at the stem, where they were under it.
 - With `--parity all`, W 24 Regular has one row a pixel wider than its neighbours near the feet.
+- `/\` reads as one `Λ` shape in the Bold diagonal sheet, on main's row as much as on this branch's.
+- These notes are from the sheets as drawn with parity off, apart from the last and the proofs under Spacing. After the regeneration with `avv` I looked at the two proofs and at the Regular and Bold diagonal sheets from 9 to 20: in Regular, A has a single apex at 9, 12, 16 and 20, and V at 9 and 12 keeps a foot two pixels wide, as the count above says.
+
+### Decided
+
+- Apex parity: A, V, v only (`--parity avv`), and it is the importer's default, not an option to remember. It takes the doubled apex from 190 of 378 to 24 (32 of 72 to 5 on the sheet grids). `all` removes no more on those grids and adds the uneven row in W 24 Regular. `off` and `all` stay as values of the flag.
+- Bold bars at 14 to 16 stay at the stem, 2 px. The request was for weight that is consistent across the characters of one size and weight, and a bar under the stem is the inconsistency inside those three instances. The rule is as built.
 
 ### Open
 
-- Parity: off, A V v only, or all. The sheets are `parity-light.png`, `parity-regular.png` and `parity-bold.png`.
-- Whether Bold bars at the stem at 14 to 16 is the wanted reading of "one pixel tall bolds". From 17 up the rule does not hold: the stem grows faster than the x-height.
 - Bold bars at 33 to 36 are 3 px against a 5 px stem, where 31, 32 and 37 are one under. Not changed here.
+- From 17 up the Bold bar is one under the stem: the rule does not hold there, because the stem grows faster than the x-height.
+- 10 px Bold is tight around A, V, v after the redraw (see Spacing).
 
 ### Not verified
 
 - A browser. The proof lines are FreeType renders of the built fonts, not Chrome or Safari.
-- Spacing after the 43 advance changes and under either parity mode: only the proof line and the sheets.
-- The parity modes were run on eight grids, not built into fonts, and not run through `scripts/check.py`.
-- I looked at the Bold and Regular diagonal sheets, the Bold and Regular alphabet sheets in part, the 4x proof to 16 px, the Bold bar sheet and the Bold parity sheet at 9 to 12. I did not look closely at the Light sheets, the 1x proof, or the sheets above 32 px in Bold.
+- Spacing beyond the two proof lines, the gap counts above and the sheets. No running text was set, and the 43 advances of the bar refit were not looked at one by one.
+- The 4x proof was looked at reduced (two to four screen pixels to one), the 1x proof at full size. After the regeneration I looked at the Regular and Bold diagonal sheets at 9 to 20 only. The Light sheets, the alphabet and parity sheets and the sizes above 20 were not looked at again.
+- Why 24 A V v drawings keep an apex wider than a leg.
+- `--parity all` and `--parity off` as built fonts: `all` was run on eight grids only; `off` was the previous state of this branch, built and checked then.
 - `weight.py` was not checked letter by letter against pictures. Its round and bar counts at 25 to 48 may include strokes it misreads.
