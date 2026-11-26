@@ -1,0 +1,23 @@
+advances changed                      580
+drawings                            29862
+drawings changed                     3894
+drawings changed 13-16                882
+drawings changed 17-24                632
+drawings changed 25-48               1987
+drawings changed 7-12                 393
+drawings changed bold                1682
+drawings changed light               1099
+drawings changed regular             1113
+ink after                         3387346
+ink before                        3356091
+pixels changed                      85671
+pixels changed bold                 35642
+pixels changed light                24081
+pixels changed regular              25948
+advances changed by letter: $ {'narrower': 1, 'wider': 1}, > {'narrower': 1}, A {'wider': 61}, S {'wider': 1}, V {'wider': 56}, ^ {'wider': 1}, r {'wider': 1}, t {'wider': 1}, v {'wider': 54}, ° {'narrower': 1}, µ {'wider': 2, 'narrower': 1}, ¸ {'wider': 1}, À {'wider': 61}, Á {'wider': 61}, Â {'wider': 61}, Ã {'wider': 61}, Ä {'wider': 61}, Å {'wider': 61}, Ð {'wider': 1}, æ {'wider': 2}, î {'narrower': 1}, Ĉ {'narrower': 1, 'wider': 1}, ĉ {'narrower': 1}, Č {'narrower': 1, 'wider': 1}, č {'narrower': 1}, ĥ {'narrower': 1}, Ĵ {'narrower': 1}, ĵ {'narrower': 1}, œ {'wider': 2}, ř {'wider': 2}, Ŝ {'wider': 1}, ŝ {'narrower': 1}, Š {'wider': 1}, š {'narrower': 1}, ť {'wider': 1}, ž {'narrower': 1}, ˆ {'wider': 3}, ˇ {'wider': 3}, † {'wider': 1}, ₱ {'wider': 1}
+drawings changed by letter (top 40): /:126 \:126 A:125 N:125 À:125 Á:125 Â:125 Ã:125 Ä:125 Å:125 Ñ:125 v:124 V:124 W:123 Y:120 Ý:120 K:119 M:118 y:116 ý:116 ÿ:116 k:116 X:113 Z:110 w:108 z:103 x:98 7:94 !:3 ":3 #:3 $:3 %:3 &:3 ':3 *:3 +:3 -:3 0:3 1:3
+letters with a changed drawing: 231
+apex wider than a leg, A V v, before: 13-16 18, 17-24 39, 25-48 123, 7-12 22, all 202, bold 74, light 65, regular 63
+symmetric letters not mirror-symmetric, before: T 53, W 10, Y 1, all 107, i 42, w 1
+apex wider than a leg, A V v, after: 13-16 4, 25-48 5, 7-12 15, all 24, bold 10, light 7, regular 7
+symmetric letters not mirror-symmetric, after: T 53, W 2, Y 1, all 99, i 42, w 1

@@ -19,12 +19,36 @@ Stem targets by weight, in pixels, from Inter's own stem-to-em ratios:
   bold    max(regular + 1, round(ratio(700) * grid))
 When Inter cannot get heavy enough (small grids), the glyph is rendered at
 Inter Black and smeared right by the missing pixels, the classic bitmap bold.
+
+Each instance (one grid in one weight) has one stroke table, and every glyph
+is drawn from it:
+  stem      the target above, the width of a vertical stroke
+  bar       the height of a horizontal stroke. Inter draws bars thinner than
+            stems, so the bar is Inter's own, as the hinter rounds the H's,
+            in Light and Regular. In Bold it is the stem wherever the
+            x-height holds three bars and the two counters between them
+            (e, a, s), each counter at least a row and at least the bar less
+            one: x-height >= 3 * stem + 2 * max(1, stem - 1). Where it does
+            not, the bar stays Inter's own: a bar raised part of the way is
+            rounded up in one letter and down in the next. The outlines of
+            an instance whose bar differs from Inter's are made heavier
+            vertically until the H's bar is that many rows.
+  diagonal  the row thickness that makes a leaning stroke as thick across as
+            the stem: stem * sqrt(1 + lean^2), in whole pixels (diagonals.py)
+  round     a round stroke is the stem at its sides and the bar at its top
+            and bottom; the erosion takes it down to those.
+
+A V v change width by a pixel where that makes the apex exactly one stroke
+wide (--parity avv, the default). --parity all lets W w M do the same;
+--parity off keeps every width.
 """
 import argparse
 import collections
 import ctypes
 import io
+import math
 import os
+import sys
 import tempfile
 import time
 import unicodedata
@@ -38,6 +62,9 @@ from fontTools.ttLib.tables._g_l_y_f import Glyph, GlyphCoordinates
 from fontTools.varLib.instancer import instantiateVariableFont
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+import diagonals    # noqa: E402
+
 INTER = os.path.join(HERE, '..', 'vendor', 'inter', 'InterVariable.ttf')
 UPM = 2048
 
@@ -47,6 +74,10 @@ args.add_argument('--weights', default='light,regular,bold')
 args.add_argument('--charset', default=os.path.join(HERE, '..', 'charset.txt'))
 args.add_argument('--out', default=os.path.join(HERE, '..', 'glyphs'))
 args.add_argument('--no-derive', action='store_true', help='skip the derivation stage (shared parts, accents)')
+args.add_argument('--parity', default='avv', choices=('off', 'avv', 'all'),
+                  help='let A V v (avv, the default) or A V v W w M (all) change width by a pixel for an apex one stroke wide; off keeps every width')
+args.add_argument('--no-redraw', action='store_true', help='skip the fixed-step redraw of the diagonal letters')
+args.add_argument('--no-bars', action='store_true', help="leave the bars at the source's own thickness")
 opt = args.parse_args()
 
 
@@ -214,6 +245,85 @@ def warp_font(font, pts):
         g.coordinates = GlyphCoordinates([(x, round(warp_y(y, pts))) for x, y in g.coordinates])
         g.recalcBounds(glyf)
     font['head'].flags |= 0x0008
+
+
+# --- Bars ---------------------------------------------------------------------
+def bar_units(font):
+    """Height of the H's crossbar in the outline, in units."""
+    ys = sorted({y for _, y in font['glyf']['H'].coordinates})
+    return ys[2] - ys[1] if len(ys) == 4 else None
+
+
+def bar_rows(natural, stem, xheight, weight):
+    """The instance's bar in rows; `natural` is the source's own as the hinter rounds it."""
+    if weight == 'bold' and natural < stem and xheight >= 3 * stem + 2 * max(1, stem - 1):
+        return stem
+    return natural
+
+
+def embolden_y(font, e):
+    """Move every edge of every outline e/2 units up or down, outward for a
+    positive e: horizontal strokes gain e in height and vertical ones keep
+    their width. Each point moves by the y part of the mitred offset of its
+    two edges."""
+    glyf = font['glyf']
+    for name in list(glyf.keys()):
+        g = glyf[name]
+        if g.numberOfContours <= 0:
+            continue
+        pts = [tuple(p) for p in g.coordinates]
+        out = list(pts)
+        start = 0
+        for end in g.endPtsOfContours:
+            c = pts[start:end + 1]
+            n = len(c)
+            for i, p in enumerate(c):
+                j = i - 1
+                while c[j % n] == p and i - j < n:
+                    j -= 1
+                a = c[j % n]
+                j = i + 1
+                while c[j % n] == p and j - i < n:
+                    j += 1
+                b = c[j % n]
+                lin, lout = math.hypot(p[0] - a[0], p[1] - a[1]), math.hypot(b[0] - p[0], b[1] - p[1])
+                if not lin or not lout:
+                    continue
+                ix, iy, ox, oy = (p[0] - a[0]) / lin, (p[1] - a[1]) / lin, (b[0] - p[0]) / lout, (b[1] - p[1]) / lout
+                d = ix * ox + iy * oy
+                if d > -0.9375:
+                    sy = max(-1.5, min(1.5, (ix + ox) / (1 + d)))
+                    out[start + i] = (p[0], round(p[1] + e / 2 * sy))
+            start = end + 1
+        g.coordinates = GlyphCoordinates(out)
+        g.recalcBounds(glyf)
+
+
+def fit_bar(font, grid, m, rows):
+    """Make the warped font's bars exactly `rows` pixels: thicken (or thin)
+    the outlines vertically, then move the metric lines, which the thickening
+    pushed out by half of it, back onto their rows."""
+    u = UPM / grid
+    have = bar_units(font)
+    cap = m['cap'] * u
+    if have is None or cap <= rows * u:
+        return
+    # Moving the lines back squeezes what lies between them by cap / (cap + e).
+    e = cap * (rows * u - have) / (cap - rows * u)
+    if abs(e) < 1:
+        return
+    embolden_y(font, e)
+    top = max(m['asc'], m['cap'] + m['ovs']) * u
+    pts = [(-m['desc'] * u - e / 2 - 2000, -m['desc'] * u - 2000), (-m['desc'] * u - e / 2, -m['desc'] * u), (-e / 2, 0.0)]
+    pts += [(v * u + e / 2, v * u) for v in sorted({m['x'], m['x'] + m['ovs'], m['cap'], m['cap'] + m['ovs'], m['asc']})]
+    pts.append((top + e / 2 + 2000, top + 2000))
+    glyf = font['glyf']
+    for name in list(glyf.keys()):
+        g = glyf[name]
+        if g.numberOfContours <= 0:
+            continue
+        g.coordinates = GlyphCoordinates([(x, round(warp_y(y, pts))) for x, y in g.coordinates])
+        g.recalcBounds(glyf)
 
 
 # --- Rendering --------------------------------------------------------------
@@ -578,7 +688,24 @@ def outline_pieces(face, cp):
     return pieces(np.unpackbits(buf, axis=1)[:, :bm.width].astype(bool).tolist())
 
 
-def render_font(path, grid, smear, stem):
+def redraw_rows(name, rows, hint, stem, bar):
+    """The fixed-step redraw (diagonals.py) of one rendered glyph: (rows, change in width, status)."""
+    bm = np.array([[c == '#' for c in r] for r in rows], bool)
+    hb = np.array([[c == '#' for c in r] for r in hint], bool) if hint and len(hint) == len(rows) and len(hint[0]) == len(rows[0]) else bm
+    ys, xs = np.where(bm)
+    if not len(ys):
+        return rows, 0, 'same'
+    y0, y1, x0, x1 = ys.min(), ys.max() + 1, xs.min(), xs.max() + 1
+    new, status = diagonals.redraw(name, bm[y0:y1, x0:x1], hb[y0:y1, x0:x1], stem, bar, opt.parity)
+    if status != 'redrawn':
+        return rows, 0, status
+    grown = new.shape[1] - (x1 - x0)
+    out = np.zeros((bm.shape[0], bm.shape[1] + grown), bool)
+    out[y0:y1, x0:x0 + new.shape[1]] = new
+    return [''.join('#' if v else '.' for v in r) for r in out], grown, status
+
+
+def render_font(path, grid, smear, stem, tally=None):
     face = freetype.Face(path)
     prop = _XHeightProp(ctypes.cast(face._FT_Face, ctypes.c_void_p).value, 0)
     freetype.raw.FT_Property_Set(freetype.get_handle(), b'autofitter', b'increase-x-height', ctypes.byref(prop))
@@ -615,13 +742,20 @@ def render_font(path, grid, smear, stem):
                 rows, cover, orbit = symmetrize(rows, cover, lr, tb, orig)
                 rows = thin(rows, cover, k=stem, h=bar, orbit=orbit)
                 rows, cover, orbit = symmetrize(rows, cover, lr, tb, orig)
+                hint = rows
                 rows = thin(rows, cover, k=stem, h=bar, orbit=orbit)
             else:
+                hint = rows
                 rows = thin(rows, cover, k=stem, h=bar)
             if pieces(rows) > 1:
                 want = outline_pieces(big, cp)
                 if pieces(rows) > want:
                     rows = bridge(rows, cover, want, orbit)
+            if name in diagonals.RECIPES and not opt.no_redraw:
+                rows, grown, status = redraw_rows(name, rows, hint, stem, bar)
+                adv += grown
+                if tally is not None:
+                    tally[status] += 1
             if lr:
                 left = center_in_advance(rows, left, adv)
         if smear and rows:
@@ -1033,7 +1167,7 @@ for grid in grids:
     s_reg = max(1, round(ratio['regular'] * grid))
     targets = {'light': max(1, round(ratio['light'] * grid)), 'regular': s_reg,
                'bold': max(s_reg + 1, round(ratio['bold'] * grid))}
-    rendered, notes, derived, paths = {}, {}, {}, {}
+    rendered, notes, derived, paths, redrawn = {}, {}, {}, {}, {}
     for weight in weights:
         px = targets[weight]
         wght = weight_for_stem(px * unit, opsz)
@@ -1042,7 +1176,22 @@ for grid in grids:
         warp_font(font, pts)
         path = os.path.join(tmp, f'inter-{grid}-{weight}.ttf')
         font.save(path)
-        rendered[weight] = render_font(path, grid, smear, stem=px - smear)
+        # The bar the hinter gives the source's own outline, then the
+        # instance's. Only an instance whose bar differs from the source's
+        # is refitted, a little over the whole row if the hinter rounds the
+        # first try down: refitting moves every horizontal edge, and where
+        # the source's bar already serves, its drawings are left alone.
+        own = bar_thickness(bitmap_rows_of_H(path, grid))
+        want = own if opt.no_bars else bar_rows(own, px - smear, m['x'], weight)
+        for over in ((0, 0.2, 0.4, -0.2) if want != own else ()):
+            font = instance(opsz, wght)
+            warp_font(font, pts)
+            fit_bar(font, grid, m, want + over)
+            font.save(path)
+            if bar_thickness(bitmap_rows_of_H(path, grid)) == want:
+                break
+        redrawn[weight] = collections.Counter()
+        rendered[weight] = render_font(path, grid, smear, stem=px - smear, tally=redrawn[weight])
         paths[weight] = path
         notes[weight] = f'opsz {opsz}, wght {wght}, stem {px}px, bar {bar_thickness(bitmap_rows_of_H(path, grid))}px' + (f', smear {smear}' if smear else '')
     # One line box per grid, shared by every weight. The ascent is fixed by
@@ -1062,5 +1211,6 @@ for grid in grids:
     for weight in weights:
         write(os.path.join(opt.out, str(grid), weight + '.txt'), grid, weight, notes[weight], m, ascent, descent, above, rendered[weight])
     print(f'grid {grid:2d}: x {m["x"]} cap {m["cap"]} asc {m["asc"]} desc {m["desc"]} ovs {m["ovs"]} | box {ascent}+{descent}, ink {above} above | '
-          + ' | '.join(f'{w} {notes[w]}' + (f', {derived[w]}' if w in derived else '') for w in weights), flush=True)
+          + ' | '.join(f'{w} {notes[w]}' + (f', {derived[w]}' if w in derived else '')
+                       + f', redrawn {redrawn[w]["redrawn"]} kept {redrawn[w]["kept"]}' for w in weights), flush=True)
 print(f'{len(grids)} grids in {time.time() - started:.0f} s')

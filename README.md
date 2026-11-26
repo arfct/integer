@@ -4,7 +4,7 @@
 
 Integer Sans is a variable pixel font in which every value is a whole number: every rendered instance is a real bitmap. It ships as two families: **Integer Sans** holds a drawing for every size from 7 to 24 and **Integer Sans Display** one for every size from 25 to 48; the browser picks the drawing from the font-size, never an interpolation. The weight axis steps between Light, Regular, and Bold, each a whole number of pixels of stem. The drawings are rendered from a source typeface by a reproducible pipeline and corrected by hand in override files.
 
-Specimen: https://arfct.github.io/integer/ (built from `main` by the Pages workflow). The importer renders grids 7 to 48 in about six minutes; the files are committed, so builds never need it. The design, its reasoning, and the roadmap are in [docs/design.md](docs/design.md).
+Specimen: https://arfct.github.io/integer/ (built from `main` by the Pages workflow). The importer renders grids 7 to 48 in about seven minutes; the files are committed, so builds never need it. The design, its reasoning, and the roadmap are in [docs/design.md](docs/design.md).
 
 ## Build
 
