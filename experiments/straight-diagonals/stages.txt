@@ -1,0 +1,42 @@
+Stage trace, letters AVvWwXxYyKkMNZz7/\<>, grids 7,9,10,12,13,16,20,24,32,48, three weights
+final stage equals the committed drawing: 600 of 600
+
+               edges  bent          excess  kinks  uneven  back  thin   drawings with a bent edge
+outline         1268   190   15.0%    0.07     49       7     3   193   112 of 600
+warped          1264   167   13.2%    0.07     58       6     3   210   98 of 600
+hinted          1259   152   12.1%    0.06     43       8     3   223   79 of 600
+mirror          1251   187   14.9%    0.07     48      22     9   192   93 of 600
+thinned         1270   416   32.8%    0.10     90     153    19   452   180 of 600
+final           1270   418   32.9%    0.10     88     150    21   445   179 of 600
+thin only       1289   369   28.6%    0.09     96     145    18   400   206 of 600
+mirror only     1251   173   13.8%    0.06     38       8     3   185   80 of 600
+
+light
+outline          434    49   11.3%    0.04     14       1     1    29   33 of 200
+warped           435    45   10.3%    0.04     19       1     1    39   30 of 200
+hinted           427    39    9.1%    0.04     12       2     1    47   24 of 200
+mirror           423    56   13.2%    0.03     16       6     3    43   30 of 200
+thinned          430   120   27.9%    0.06     26      41     9    82   53 of 200
+final            430   121   28.1%    0.07     26      40    11    80   53 of 200
+thin only        432   105   24.3%    0.06     27      43    10    82   62 of 200
+mirror only      423    52   12.3%    0.03     14       2     1    41   26 of 200
+
+regular
+outline          432    59   13.7%    0.06     19       1     1    64   35 of 200
+warped           434    54   12.4%    0.06     23       2     1    76   32 of 200
+hinted           431    45   10.4%    0.06     17       3     1    82   23 of 200
+mirror           420    56   13.3%    0.06     17       9     5    68   29 of 200
+thinned          431   139   32.3%    0.09     23      52     9   126   57 of 200
+final            431   140   32.5%    0.09     23      51     9   123   57 of 200
+thin only        434   129   29.7%    0.08     30      46     7   122   67 of 200
+mirror only      420    50   11.9%    0.06     13       3     1    65   24 of 200
+
+bold
+outline          402    82   20.4%    0.12     16       5     1   100   44 of 200
+warped           395    68   17.2%    0.10     16       3     1    95   36 of 200
+hinted           401    68   17.0%    0.10     14       3     1    94   32 of 200
+mirror           408    75   18.4%    0.11     15       7     1    81   34 of 200
+thinned          409   157   38.4%    0.16     41      60     1   244   70 of 200
+final            409   157   38.4%    0.15     39      59     1   242   69 of 200
+thin only        423   135   31.9%    0.13     39      56     1   196   77 of 200
+mirror only      408    71   17.4%    0.10     11       3     1    79   30 of 200

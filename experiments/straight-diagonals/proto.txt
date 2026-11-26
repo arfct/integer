@@ -1,0 +1,62 @@
+Redraw prototypes on AVvWwXxYyKkMNZz7n at grids 7,9,10,12,13,16,20,24,32,48, three weights: 510 drawings
+constant = edges whose interior runs are all one length; pixels = pixels that differ from the committed drawing
+
+before
+               edges  bent          excess  kinks  uneven  back  thin  const  pixels   drawings with a bent edge
+light            345    93   27.0%    0.08     24      38    11    80     70       0   43 of 170
+regular          347   116   33.4%    0.11     21      47     9   123     67       0   49 of 170
+bold             323   135   41.8%    0.12     35      55     1   242     69       0   68 of 170
+all             1015   344   33.9%    0.10     80     140    21   445    206       0   160 of 510
+
+fixed
+               edges  bent          excess  kinks  uneven  back  thin  const  pixels   drawings with a bent edge
+light            337    26    7.7%    0.04      0       1     1     0     76    1606   19 of 170
+regular          337    27    8.0%    0.05      0       1     1    16     87    1658   20 of 170
+bold             321    35   10.9%    0.07      0       2     1   166     78    1898   28 of 170
+all              995    88    8.8%    0.05      0       4     3   182    241    5162   67 of 510
+  redrawn 412, identical to the committed drawing 90, recipe gave up 8
+  ink pixels 37877 before, 38411 after
+  width changed in 0 drawings
+  gave up on: z 7 light, z 7 regular, y 7 bold, k 7 bold, M 7 bold, z 7 bold, k 9 bold, k 10 bold
+
+parity
+               edges  bent          excess  kinks  uneven  back  thin  const  pixels   drawings with a bent edge
+light            337    26    7.7%    0.04      0       1     1     0     78    1996   19 of 170
+regular          341    27    7.9%    0.05      0       1     1    20     85    2021   20 of 170
+bold             325    35   10.8%    0.06      0       2     1   192     72    2390   28 of 170
+all             1003    88    8.8%    0.05      0       4     3   212    235    6407   67 of 510
+  redrawn 416, identical to the committed drawing 87, recipe gave up 7
+  ink pixels 37877 before, 38194 after
+  width changed in 70 drawings: v 7 light 4>3, w 7 light 6>5, v 7 regular 4>3, w 7 regular 6>5, v 7 bold 5>4, w 7 bold 7>6, A 9 light 6>7, V 9 light 6>7, A 9 regular 6>7, V 9 regular 6>7, A 9 bold 6>7, V 9 bold 7>8, W 10 light 10>11, w 10 light 8>9, W 10 regular 10>11, w 10 regular 8>9, A 10 bold 8>9, v 10 bold 6>7, A 12 light 8>9, V 12 light 8>9, w 12 light 8>9, A 12 regular 8>9, V 12 regular 8>9, w 12 regular 8>9, A 12 bold 9>10, V 12 bold 9>10, v 12 bold 7>8, W 12 bold 12>13, v 13 light 6>7, W 13 light 12>11, v 13 regular 6>7, W 13 regular 12>11, A 13 bold 9>10, V 13 bold 9>10, v 13 bold 7>8, W 13 bold 13>12, w 13 bold 11>12, v 16 bold 9>10, W 20 light 18>17, A 20 regular 13>14, v 20 regular 9>10, w 20 regular 14>15, A 20 bold 14>15, W 20 bold 20>19, A 24 light 15>16, v 24 light 11>12, W 24 light 21>22, w 24 light 17>18, A 24 regular 15>16, v 24 regular 11>12, W 24 regular 21>22, w 24 regular 17>18, A 24 bold 17>18, V 24 bold 17>18, w 24 bold 20>21, A 32 light 19>20, V 32 light 19>20, W 32 light 29>30, W 32 regular 30>31, A 32 bold 22>23, V 32 bold 22>23, v 32 bold 18>19, W 32 bold 32>33, v 48 light 22>23, w 48 light 34>35, A 48 regular 29>30, v 48 regular 23>24, A 48 bold 34>35, v 48 bold 26>27, w 48 bold 39>40
+  gave up on: z 7 light, z 7 regular, y 7 bold, k 7 bold, z 7 bold, k 9 bold, k 10 bold
+
+By letter: bent edges / edges, kinks, pixels changed
+              before                   fixed                  parity
+A            30/60  k22      0/60  k0   px432       0/60  k0   px704  
+V            28/60  k10      0/60  k0   px434       0/60  k0   px563  
+v            16/52  k12      0/54  k0   px253       0/54  k0   px448  
+W            52/94  k24      0/94  k0   px872       0/98  k0   px1207 
+w            34/72  k4       0/62  k0   px536       0/66  k0   px849  
+X            24/108 k0       0/104 k0   px422       0/104 k0   px422  
+x            28/84  k0       4/84  k0   px256       4/84  k0   px256  
+Y            10/54  k2       0/54  k0   px161       0/54  k0   px161  
+y            36/63  k5      30/71  k0   px520      30/71  k0   px520  
+K             7/51  k0      13/50  k0   px234      13/50  k0   px234  
+k             6/41  k0       6/39  k0   px131       6/39  k0   px131  
+M            26/52  k0       0/52  k0   px429       0/52  k0   px430  
+N            10/38  k0       0/30  k0   px174       0/30  k0   px174  
+Z            12/57  k1       9/57  k0   px114       9/57  k0   px114  
+z             9/54  k0      10/49  k0   px68       10/49  k0   px68   
+7             2/60  k0       2/60  k0   px126       2/60  k0   px126  
+n            14/15  k0      14/15  k0   px0        14/15  k0   px0    
+
+Apex of A and vertex of V, v: ink in the end row minus the stem (0 = exactly one stem wide), drawings per weight
+  before  light    +0: 19  +1: 11
+  before  regular  +0: 18  +1: 12
+  before  bold     +0: 12  +1: 18
+  fixed   light    +0: 19  +1: 11
+  fixed   regular  +0: 18  +1: 12
+  fixed   bold     -1: 1  +0: 12  +1: 17
+  parity  light    +0: 30
+  parity  regular  +0: 30
+  parity  bold     -1: 4  +0: 26
