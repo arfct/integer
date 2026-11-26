@@ -661,6 +661,14 @@ ACCENTS = None                       # grids that compose accented letters from 
 # overshoot row and flattens the bottom one, so b's bowl flipped is not p's
 # (0.26 to 0.33 px) and n turned is one row taller than u: those are skipped.
 GUARD, GUARD_PPEM = 0.2, 256
+# An accent with no clear row over its letter goes up one row, and may leave
+# the line box to do it: by at most ABOVE rows over the box's ascent. One row
+# is all it ever takes. The accent is what lies above the letter's top row, so
+# at worst its lowest row is the one on that row, and one row up it is clear;
+# and the ascent is the tallest render, so an accent one row up is at most one
+# row over it. A limit of two would never be used; none would let a later
+# change to the rule push ink into the line above without anyone deciding to.
+ABOVE = 1
 
 
 def to_pixels(rows, left, top):
@@ -736,6 +744,13 @@ def touching(a, b):
     return any((y + dy, x + dx) in b for y, x in a for dy in (-1, 0, 1) for dx in (-1, 0, 1))
 
 
+def crowds(accent, B):
+    """True when there is no clear row between an accent and the letter under
+    it: its lowest row is the one on the letter's top row, whether its ink
+    touches the letter's or sits over a gap in it (the acute in the fork of Y)."""
+    return touching(accent, B) or min(y for y, _ in accent) <= max(y for y, _ in B) + 1
+
+
 def groups(px):
     """A set of pixels as its 8-connected pieces."""
     todo, out = set(px), []
@@ -764,9 +779,11 @@ def compose(base, accented, top_row, cedilla, room, own=False):
     row. Where the hinter drew the body one row taller under an accent than
     alone (y and u at 44 rows and up), that row is body, not accent: a piece
     lying wholly in the first row and touching the body below is dropped when
-    there is accent above it. An accent that would touch the base letter goes
-    up a row when the line box has one to spare (`room`, the box's ascent in
-    rows), so the two stay apart; in a full box it stays where it is."""
+    there is accent above it. An accent with no clear row between it and the
+    base letter (`crowds`) goes up a row; one that has a clear row is not moved.
+    `room` is the line box's ascent in rows, and the accent may end up to
+    ABOVE rows over it: type may ink above its line box, and an accent run
+    into its letter reads worse than one in the line gap."""
     (B, badv), (A, aadv) = base, accented
     keep = body(A, top_row, cedilla)
     accent = A - keep
@@ -783,7 +800,7 @@ def compose(base, accented, top_row, cedilla, room, own=False):
         B, badv = {(y, x - dx) for y, x in B}, aadv
     else:
         accent = {(y, x + dx) for y, x in accent}
-    if not cedilla and touching(accent, B) and max(y for y, _ in accent) + 2 <= room:
+    if not cedilla and crowds(accent, B) and max(y for y, _ in accent) + 2 <= room + ABOVE:
         accent = {(y + 1, x) for y, x in accent}
     return B | accent, badv
 
@@ -888,7 +905,7 @@ def derive(rendered, path, grid, ovs, room):
     weight's drawings, in place. Returns (rules applied, rules skipped by the
     guard). The bowl and arch band runs from the baseline to the x-height plus
     the overshoot row, where a grid keeps one. `room` is the line box's ascent
-    in rows: an accent moved clear of its letter stays inside it."""
+    in rows: an accent moved clear of its letter ends at most ABOVE rows over it."""
     outl = Outlines(path, grid, ovs)
     px = {cp: (to_pixels(r, l, t), adv) for cp, (r, l, t, adv) in rendered.items()}
     xh = rendered[ord('x')][2] + ovs
@@ -967,7 +984,7 @@ def derive(rendered, path, grid, ovs, room):
         new = {(y, x + dx) for y, x in d}
         low = min(y for y, _ in new) - (max(y for y, _ in B) + 1)
         new = {(y - max(0, low - 1), x) for y, x in new}    # no further off this letter than one clear row
-        if touching(new, B) and max(y for y, _ in new) + 2 <= room:
+        if crowds(new, B) and max(y for y, _ in new) + 2 <= room + ABOVE:
             new = {(y + 1, x) for y, x in new}
         if not touching(new, B):
             put(cp, (B | new, px[cp][1]))
@@ -975,21 +992,24 @@ def derive(rendered, path, grid, ovs, room):
     return done, skipped
 
 
-def write(path, grid, weight, note, m, ascent, descent, rendered):
+def write(path, grid, weight, note, m, ascent, descent, above, rendered):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, 'w') as fh:
         fh.write(f'# Integer Sans, {grid}-row grid, {weight}. Generated from Inter 4.1 by scripts/import-inter.py\n'
                  f'# ({note}). Do not edit: put hand fixes in {weight}.overrides.txt.\n'
-                 f'# grid: {grid}\n# ascent: {ascent}\n# descent: {descent}\n# cap: {m["cap"]}\n# xheight: {m["x"]}\n\n')
+                 f'# grid: {grid}\n# ascent: {ascent}\n# descent: {descent}\n# above: {above}\n# cap: {m["cap"]}\n# xheight: {m["x"]}\n\n')
         for cp in charset:
             rows, left, top, adv = rendered[cp]
             # The box starts at the origin, or at the ink's left edge when that
             # lies left of it; `left` says where, and the build adds it back.
             off = min(left, 0)
             width = max(adv, left + (len(rows[0]) if rows else 0), 1) - off + 1
-            box = [['.'] * width for _ in range(ascent + descent)]
+            # The box is the line box plus `above` rows over its ascent, for
+            # the accents that rise out of it; the baseline is `descent` rows
+            # from the bottom either way.
+            box = [['.'] * width for _ in range(above + ascent + descent)]
             for i, r in enumerate(rows):
-                y = ascent - top + i
+                y = above + ascent - top + i
                 if 0 <= y < len(box):
                     for j, ch in enumerate(r):
                         x = left - off + j
@@ -1026,17 +1046,21 @@ for grid in grids:
         paths[weight] = path
         notes[weight] = f'opsz {opsz}, wght {wght}, stem {px}px, bar {bar_thickness(bitmap_rows_of_H(path, grid))}px' + (f', smear {smear}' if smear else '')
     # One line box per grid, shared by every weight. The ascent is fixed by
-    # the renders, before the derived stage, which works inside it. The descent
+    # the renders, before the derived stage, which may set an accent one row
+    # over it (ABOVE) and changes nothing else about the box. The descent
     # is the metric row unless ink goes deeper.
     ascent = max([m['asc'] + 1] + [top for r in rendered.values() for rows, _, top, _ in r.values() if rows])
     if not opt.no_derive:
         for weight in weights:
             done, skipped = derive(rendered[weight], paths[weight], grid, m['ovs'], ascent)
             derived[weight] = f'derived {sum(done.values())}' + (f', skipped {" ".join(skipped)}' if skipped else '')
-        assert ascent == max([ascent] + [top for r in rendered.values() for rows, _, top, _ in r.values() if rows]), f'{grid}: the derived stage left the line box'
+    # The line box does not grow for an accent raised out of it; the drawings'
+    # box does, by the same rows in every weight (`above` in the header).
+    above = max([0] + [top - ascent for r in rendered.values() for rows, _, top, _ in r.values() if rows])
+    assert above <= ABOVE, f'{grid}: ink {above} rows over the line box'
     descent = max([m['desc']] + [len(rows) - top for r in rendered.values() for rows, _, top, _ in r.values() if rows])
     for weight in weights:
-        write(os.path.join(opt.out, str(grid), weight + '.txt'), grid, weight, notes[weight], m, ascent, descent, rendered[weight])
-    print(f'grid {grid:2d}: x {m["x"]} cap {m["cap"]} asc {m["asc"]} desc {m["desc"]} ovs {m["ovs"]} | box {ascent}+{descent} | '
+        write(os.path.join(opt.out, str(grid), weight + '.txt'), grid, weight, notes[weight], m, ascent, descent, above, rendered[weight])
+    print(f'grid {grid:2d}: x {m["x"]} cap {m["cap"]} asc {m["asc"]} desc {m["desc"]} ovs {m["ovs"]} | box {ascent}+{descent}, ink {above} above | '
           + ' | '.join(f'{w} {notes[w]}' + (f', {derived[w]}' if w in derived else '') for w in weights), flush=True)
 print(f'{len(grids)} grids in {time.time() - started:.0f} s')
